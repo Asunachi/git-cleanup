@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The scan-report action's outputs (`prunable`, `stale`, `kept`, `errors`,
+  `issue-number`) are populated again: composite actions must map each
+  declared output to a `value` from an inner step, which the v0.2.2 manifest
+  omitted (the action ran and posted issues fine, but consumers reading
+  `steps.<id>.outputs.*` got empty strings). Shipped in v0.2.3.
+
 ### Added
 
 - Backup retention: `backup.retainDays` (default 0 = keep forever) makes

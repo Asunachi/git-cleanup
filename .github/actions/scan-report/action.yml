@@ -42,19 +42,25 @@ inputs:
 outputs:
   prunable:
     description: "Branches that git-cleanup would prune."
+    value: ${{ steps.scan.outputs.prunable }}
   stale:
     description: "Branches flagged stale (never deleted automatically)."
+    value: ${{ steps.scan.outputs.stale }}
   kept:
     description: "Branches kept."
+    value: ${{ steps.scan.outputs.kept }}
   errors:
     description: "Repositories that could not be scanned."
+    value: ${{ steps.scan.outputs.errors }}
   issue-number:
     description: "Report issue created or updated (when report: issue)."
+    value: ${{ steps.scan.outputs.issue-number }}
 
 runs:
   using: "composite"
   steps:
     - name: Scan and report
+      id: scan
       shell: bash
       env:
         INPUT_PATH: ${{ inputs.path }}
