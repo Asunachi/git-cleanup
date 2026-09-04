@@ -270,7 +270,7 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.2.2
         with:
           path: .
@@ -278,8 +278,11 @@ jobs:
           issue-title: "git-cleanup: branch report"
 ```
 
-`@v0.2.2` (the current release tag) is pinned above; use `@main` only if
-you want the action to track unreleased changes.
+Release tags: `v0.2.1` (first npm-published CLI version) and `v0.2.2` — the
+current release, which ships the action — both matching what npm serves.
+Pin `@v0.2.2` as shown; use `@main` only if you want the action to track
+unreleased changes. (`v0.2.1`'s tree predates the action, so it cannot be
+used to pin it.)
 
 **Shallow checkouts are handled automatically.** CI clones default to
 `fetch-depth: 1`, which hides history from merge detection (both ancestor

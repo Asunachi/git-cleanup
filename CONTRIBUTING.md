@@ -69,5 +69,30 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
    before anything goes out.
 3. `npm publish` runs `prepublishOnly` (`npm test`) and refuses to proceed if
    any test fails.
-4. Tag the release on GitHub (`git tag vX.Y.Z && git push --tags`) and create
-   a GitHub Release from the matching CHANGELOG entry.
+4. Tag the release at the exact commit whose tree npm published (normally the
+   bump commit just created) and push the tag explicitly:
+
+   ```bash
+   git tag -a vX.Y.Z -m "Release vX.Y.Z: <one-line summary>"   # tags HEAD
+   git push origin vX.Y.Z
+   ```
+
+   If `main` has drifted past the published version, tag the bump commit
+   itself rather than latest `main`, so the tag matches the npm artifact
+   (`git rev-parse vX.Y.Z^{commit}` must equal the bump commit). The release
+   tag is also what consumers pin for the GitHub Action, so a version whose
+   tree lacks a feature must not be presented as carrying it.
+5. Create a GitHub Release for the tag with notes from the matching
+   CHANGELOG entry and a link to the npm package
+   (https://www.npmjs.com/package/@maliqkara/gitcleanup).
+
+### Tagging past releases
+
+npm versions can outlive their tags: `v0.2.1` (the first npm-published
+version) was tagged at `e275e99` only after later work had already landed on
+`main`. To tag an older published version retroactively, find the commit
+whose tree was published (its `package.json` shows that name + version) and
+run `git tag -a vX.Y.Z <sha> && git push origin vX.Y.Z`, then create its
+GitHub Release. Note that `v0.2.1`'s tree predates the GitHub Action, so
+`@v0.2.1` pins a CLI-only snapshot — `v0.2.2` (which ships the action) is the
+earliest tag that resolves `Asunachi/git-cleanup/.github/actions/scan-report`.
