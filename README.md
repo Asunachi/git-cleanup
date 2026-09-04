@@ -16,9 +16,9 @@ Requires **Node.js ≥ 18**.
   <img src="demo.svg" alt="git-cleanup: scan &amp; prune demo" width="100%" />
 </p>
 
-**Try the [interactive playground](index.html)** — a simulated repo running the
-real decision engine in your browser: drag the age thresholds and watch every
-branch re-classify live.
+**Try the [interactive playground](https://asunachi.github.io/git-cleanup/)** —
+a simulated repo running the real decision engine in your browser: drag the
+age thresholds and watch every branch re-classify live.
 
 ```
 $ git-cleanup scan
