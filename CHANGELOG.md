@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-09-05
+
 ### Fixed
 
 - `prs --json` always emits exactly one parseable JSON document. It used to
