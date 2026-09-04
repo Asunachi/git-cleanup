@@ -11,7 +11,7 @@ import { loadConfig } from "./config.mjs";
 import { analyzeRepo } from "./analyze.mjs";
 import { printRepoReport, reposToJSON, actionableDelete } from "./report.mjs";
 import { confirmed, pruneRepo } from "./prune.mjs";
-import { closePR, stalePRs } from "./github.mjs";
+import { closePR, stalePRs } from "./forge.mjs";
 import { c, plural } from "./util.mjs";
 import { VERDICTS } from "./classify.mjs";
 
@@ -274,6 +274,7 @@ async function cmdPrs(results, cfg, opts) {
     for (const p of stalePRs(r.pr.prs, closeThreshold)) {
       try {
         await closePR({
+          provider: r.pr.provider,
           owner: r.pr.repo.owner,
           repo: r.pr.repo.repo,
           source: r.pr.source,

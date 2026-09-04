@@ -5,11 +5,12 @@ export { loadConfig, normalizeConfig } from "./config.mjs";
 export {
   bestPR,
   closePR,
-  findGitHubRemote,
+  detectForge,
   loadPRs,
-  parseGitHubRemote,
+  providerFor,
+  providers,
   stalePRs,
-} from "./github.mjs";
+} from "./forge.mjs";
 export {
   defaultBaseRefs,
   git,

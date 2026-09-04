@@ -325,3 +325,31 @@ exit codes).
   history), which covers squash and rebase merges. It cannot detect merges
   whose code changed afterwards (e.g. cherry-picks that were amended), which
   is why PR status and your review of `stale` rows matter.
+
+## Forge support (roadmap)
+
+PR enrichment lives behind a small provider abstraction (`src/forge.mjs`):
+forges implement one contract — parse their remote URLs, load merge/pull
+requests keyed by head branch (`loadPRs`), and close one with a comment
+(`closePR`) — and register in the `providers` map. All consumers read only
+that common shape, so a new forge is a new `src/providers/<forge>.mjs` plus
+one registry line, no changes in `analyze`/`classify`/`report`/`cli`/the
+Action. Remotes are detected by hostname (`github.com`; `gitlab.com` and
+self-hosted `*.gitlab.*` hosts are recognized but have no provider yet, so
+those repos degrade to pure-git cleanup with a clear message).
+
+Planned, in order of expected value:
+
+1. **GitLab (gitlab.com + self-hosted)** — implement
+   `src/providers/gitlab.mjs` over the GitLab REST API (a `GITLAB_TOKEN`,
+   mirroring the GitHub REST path): list merge requests with
+   `state=opened/merged/closed&source_branch=`, map their state to the
+   common shape, and close via `PUT /merge_requests/:id` plus a comment
+   note. Self-hosted instances need the API base URL from the remote host.
+2. **GitLab CI integration** — a `.gitlab-ci.yml` template mirroring
+   `.github/workflows/ci.yml` (test matrix + CLI smoke), and optionally a
+   scheduled pipeline that runs `git-cleanup scan` with `CI_PROJECT_*`
+   variables as the report channel, since GitLab has no Action market — the
+   CLI is invoked directly instead.
+3. **Bitbucket** — same contract over its REST API when a maintainer shows
+   up; everything else already treats remotes generically.

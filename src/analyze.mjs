@@ -13,7 +13,7 @@ import {
   upstreamOf,
 } from "./git.mjs";
 import { classify, classifyRemote, VERDICTS } from "./classify.mjs";
-import { bestPR, loadPRs } from "./github.mjs";
+import { bestPR, loadPRs } from "./forge.mjs";
 import { daysBetween } from "./util.mjs";
 
 function shortNameOf(remoteBranch) {

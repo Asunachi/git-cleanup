@@ -26,7 +26,11 @@ only. Please keep it that way unless there is a very strong reason not to.
 - `src/classify.mjs` — the decision engine and config defaults.
 - `src/analyze.mjs` — gathers one repo's state and classifies every branch.
 - `src/config.mjs` — config discovery and layering.
-- `src/github.mjs` — optional PR enrichment (`gh` CLI, then REST fallback).
+- `src/forge.mjs` — forge abstraction: provider registry, remote detection by
+  hostname, and the shared PR shape consumed by everything else.
+- `src/providers/github.mjs` — the GitHub provider behind that contract (`gh`
+  CLI, then REST fallback). New forges (GitLab, Bitbucket) add a sibling here
+  and register in `forge.mjs`.
 - `src/prune.mjs` — deletion with confirmation guards.
 - `src/report.mjs` / `src/cli.mjs` — rendering and command-line interface.
 - `test/` — unit tests plus integration tests against throwaway repos.

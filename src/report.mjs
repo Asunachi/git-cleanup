@@ -159,6 +159,7 @@ export function reposToJSON(repos, cfg) {
       remotes: r.meta?.remotes ?? undefined,
       pr: r.pr
         ? {
+            provider: r.pr.provider ?? undefined,
             source: r.pr.source,
             repo: r.pr.repo,
             error: r.pr.error || undefined,

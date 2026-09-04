@@ -1,16 +1,17 @@
-// Optional GitHub integration. Tries, in order:
+// GitHub forge provider (see src/forge.mjs for the provider contract).
+// Reads PRs via, in order:
 //   1. the `gh` CLI (fast, uses its own auth)
 //   2. the GitHub REST API with a GITHUB_TOKEN env var
 // When neither is available PRs are simply not tracked and cleanup falls back
 // to pure git merge detection.
 
 import { spawnSync } from "node:child_process";
-import { daysFromNowIso } from "./util.mjs";
+import { daysFromNowIso } from "../util.mjs";
 
 export class PRBackendError extends Error {}
 
 /** Parse owner/repo out of a GitHub remote URL, or null. */
-export function parseGitHubRemote(url) {
+function parseGitHubRemote(url) {
   if (!url) return null;
   const cleaned = url
     .replace(/^git@/, "ssh://git@")
@@ -21,7 +22,7 @@ export function parseGitHubRemote(url) {
 }
 
 /** Find the first GitHub remote of a repo. Returns {name, owner, repo} or null. */
-export function findGitHubRemote(cwd, remotes) {
+function findGitHubRemote(cwd, remotes) {
   for (const name of remotes) {
     const r = spawnSync("git", ["remote", "get-url", name], {
       cwd,
@@ -104,24 +105,33 @@ function fetchGhPrs(owner, repo) {
     ],
     { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }
   );
-  if (!r.status) {
+  // A missing gh binary shows up as r.error with status undefined — that must
+  // fall through to the REST fallback, not silently read as success.
+  if (!r.error && r.status === 0) {
     const json = JSON.parse(r.stdout || "[]");
     return json.map(normalizeGhPr);
+  }
+  if (r.error) {
+    throw new PRBackendError(`gh unavailable: ${r.error.message}`);
   }
   throw new PRBackendError((r.stderr || "gh failed").trim().split("\n").pop());
 }
 
 /**
  * Load every PR for the repo, keyed by head branch name.
- * Returns { source, repo, prs: Map<headRef, PR[]>, error }
+ * Returns { provider, source, repo, prs: Map<headRef, PR[]>, error }
+ *  - provider: "github"
  *  - source: "gh" | "rest" | "none"
  *  - prs contains all PRs (open/merged/closed), newest-activity first.
  */
-export async function loadPRs({ cwd, remotes, track }) {
-  if (!track) return { source: "none", repo: null, prs: new Map(), error: null };
+async function loadPRs({ cwd, remotes, track }) {
+  if (!track) {
+    return { provider: "github", source: "none", repo: null, prs: new Map(), error: null };
+  }
   const ghRemote = findGitHubRemote(cwd, remotes);
   if (!ghRemote) {
     return {
+      provider: "github",
       source: "none",
       repo: null,
       prs: new Map(),
@@ -139,6 +149,7 @@ export async function loadPRs({ cwd, remotes, track }) {
     const token = process.env.GITHUB_TOKEN;
     if (!token) {
       return {
+        provider: "github",
         source: "none",
         repo: { owner, repo },
         prs: new Map(),
@@ -150,6 +161,7 @@ export async function loadPRs({ cwd, remotes, track }) {
       source = "rest";
     } catch (restErr) {
       return {
+        provider: "github",
         source: "none",
         repo: { owner, repo },
         prs: new Map(),
@@ -170,31 +182,11 @@ export async function loadPRs({ cwd, remotes, track }) {
   for (const list of prs.values()) {
     list.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
   }
-  return { source, repo: { owner, repo }, prs, error: null };
-}
-
-/** Pick the most relevant PR for a branch (newest activity first). */
-export function bestPR(prsMap, shortName) {
-  const list = prsMap.get(shortName);
-  return list && list.length ? list[0] : null;
-}
-
-/** Open PRs that have had no activity for staleAfterDays or more. */
-export function stalePRs(prs, staleAfterDays) {
-  const out = [];
-  for (const list of prs.values()) {
-    for (const p of list) {
-      if (p.state === "open" && (p.ageDays ?? 0) >= staleAfterDays) {
-        out.push(p);
-      }
-    }
-  }
-  out.sort((a, b) => (b.ageDays ?? 0) - (a.ageDays ?? 0));
-  return out;
+  return { provider: "github", source, repo: { owner, repo }, prs, error: null };
 }
 
 /** Close one PR via the backend that was used to read it. */
-export async function closePR({ owner, repo, source, pr, comment }) {
+async function closePR({ owner, repo, source, pr, comment }) {
   const target = `${owner}/${repo}`;
   if (source === "gh") {
     const args = ["pr", "close", String(pr.number), "--repo", target];
@@ -233,3 +225,13 @@ export async function closePR({ owner, repo, source, pr, comment }) {
   }
   throw new PRBackendError("no PR backend available to close PRs");
 }
+
+/** GitHub implementation of the forge provider contract. */
+export const githubProvider = {
+  id: "github",
+  parseRemote: parseGitHubRemote,
+  findRemote: findGitHubRemote,
+  loadPRs,
+  closePR,
+};
+
