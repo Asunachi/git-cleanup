@@ -1,6 +1,6 @@
 {
-  "name": "git-cleanup",
-  "version": "0.1.0",
+  "name": "gitcleanup",
+  "version": "0.2.0",
   "description": "Scan local and remote Git branches, cross-reference PR merge status, and safely prune stale/merged branches.",
   "license": "MIT",
   "author": { "name": "Maliq" },
@@ -32,6 +32,5 @@
     "pull-request",
     "stale",
     "cli"
-  ],
-  "license": "MIT"
+  ]
 }

@@ -20,14 +20,21 @@ $ git-cleanup prs --close      # stale open PR automator
 
 ## Install
 
-No dependencies to install — run straight from a checkout, or link it:
+The npm package is **`gitcleanup`** (the registry name `git-cleanup` is held
+by an unrelated project); the CLI command stays `git-cleanup`.
+
+```bash
+npm install -g gitcleanup    # adds the `git-cleanup` command to your PATH
+
+# then, inside any git repository:
+git-cleanup scan
+```
+
+No dependencies to install — you can also run straight from a checkout:
 
 ```bash
 git clone https://github.com/Asunachi/git-cleanup.git
 cd git-cleanup
-npm link          # adds `git-cleanup` to your PATH
-
-# or without installing:
 node bin/git-cleanup.mjs scan
 ```
 

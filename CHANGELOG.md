@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-04
+
+First npm release (package name `gitcleanup`; the npm `git-cleanup` name is
+held by an unrelated tool). The CLI binary stays `git-cleanup`.
+
 ### Added
 
 - Squash/rebase-aware merge detection: branches whose tip tree already exists
