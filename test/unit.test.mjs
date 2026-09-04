@@ -307,9 +307,12 @@ test("backup config: enabled by default, normalizes, can be disabled", () => {
   const d = defaults();
   assert.equal(d.backup.enabled, true);
   assert.equal(d.backup.dir, null);
+  assert.equal(d.backup.retainDays, 0); // 0 = keep backups forever
   assert.equal(normalizeConfig({ backup: { enabled: false } }).backup.enabled, false);
   assert.equal(normalizeConfig({ backup: { dir: "/tmp/bk" } }).backup.dir, "/tmp/bk");
+  assert.equal(normalizeConfig({ backup: { retainDays: 30 } }).backup.retainDays, 30);
   assert.throws(() => normalizeConfig({ backup: { enabled: "yes" } }), /true or false/);
+  assert.throws(() => normalizeConfig({ backup: { retainDays: -1 } }));
 });
 
 test("config layers: defaults < cwd config < --config", () => {

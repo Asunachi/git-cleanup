@@ -157,6 +157,7 @@ async function cmdScan(results, cfg, opts) {
 async function cmdPrune(results, cfg, opts) {
   let deletedLocal = 0;
   let deletedRemote = 0;
+  let removedBackups = 0;
   let errors = 0;
   for (const r of results) {
     if (r.notGit) {
@@ -167,16 +168,19 @@ async function cmdPrune(results, cfg, opts) {
     const summary = await pruneRepo(r, cfg, { yes: opts.yes, remote: opts.remote });
     deletedLocal += summary.deletedLocal?.length ?? 0;
     deletedRemote += summary.deletedRemote?.length ?? 0;
+    removedBackups += summary.deletedBackups?.length ?? 0;
     errors += summary.errors?.length ?? 0;
     for (const e of summary.errors ?? []) {
       console.error(c.red(`  ✗ ${e.name}: ${e.error}`));
     }
   }
-  if (deletedLocal + deletedRemote + errors > 0) {
+  if (deletedLocal + deletedRemote + removedBackups + errors > 0) {
     console.log("");
     const bits = [];
     if (deletedLocal) bits.push(c.green(`deleted ${plural(deletedLocal, "local branch")}`));
     if (deletedRemote) bits.push(c.green(`deleted ${plural(deletedRemote, "remote branch")}`));
+    if (removedBackups)
+      bits.push(c.dim(`removed ${plural(removedBackups, "stale backup bundle")}`));
     if (errors) bits.push(c.red(`${errors} failed`));
     console.log(`  ${bits.join(" · ")}`);
   }

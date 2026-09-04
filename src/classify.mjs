@@ -56,6 +56,9 @@ export function defaults() {
       enabled: true,
       // Directory for bundles; null = <git dir>/git-cleanup-backups
       dir: null,
+      // >0: prune removes our backup bundles older than this many days
+      // (0 = keep backups forever)
+      retainDays: 0,
     },
     repos: [],
   };

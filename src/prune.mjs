@@ -2,7 +2,7 @@
 // interactive confirmation (or --yes on the command line).
 
 import { createInterface } from "node:readline";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { git } from "./git.mjs";
 import { VERDICTS } from "./classify.mjs";
@@ -86,6 +86,43 @@ function printBackupNote(file, tag) {
   }
 }
 
+/**
+ * Retention: remove this repo's own backup bundles (backup-*.bundle) older
+ * than cfg.backup.retainDays days. 0 (default) keeps everything. Unrelated
+ * files in a custom backup.dir are never touched.
+ */
+function sweepRetention(repo, cfg) {
+  const retain = cfg.backup?.retainDays ?? 0;
+  if (retain <= 0) return [];
+  const cutoff = Date.now() - retain * 24 * 60 * 60 * 1000;
+  let dir;
+  try {
+    dir = backupDir(repo, cfg);
+  } catch {
+    return [];
+  }
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return []; // no backups yet
+  }
+  const removed = [];
+  for (const name of entries) {
+    if (!name.startsWith("backup-") || !name.endsWith(".bundle")) continue;
+    const file = join(dir, name);
+    try {
+      if (statSync(file).isFile() && statSync(file).mtimeMs < cutoff) {
+        rmSync(file, { force: true });
+        removed.push(file);
+      }
+    } catch {
+      /* unreadable or already gone: leave it */
+    }
+  }
+  return removed;
+}
+
 function deleteLocalBranches(repo, branches) {
   const done = [];
   const errors = [];
@@ -142,11 +179,24 @@ export async function pruneRepo(repo, cfg, opts = {}) {
   const local = candidates.filter((b) => b.type === "local");
   const remote = candidates.filter((b) => b.type === "remote");
 
-  if (candidates.length === 0) {
-    return { nothing: true, repo };
+  // Retention runs even when there is nothing else to prune, so a scheduled
+  // no-op prune still sweeps expired backups.
+  const removedBackups = sweepRetention(repo, cfg);
+  if (candidates.length === 0 && removedBackups.length === 0) {
+    return { nothing: true, repo, deletedBackups: [] };
   }
 
   console.log(c.bold(`\n📦 ${repo.path}`));
+  if (removedBackups.length > 0) {
+    console.log(
+      c.dim(
+        `  🧹 removed ${plural(
+          removedBackups.length,
+          "backup bundle"
+        )} older than ${cfg.backup.retainDays}d (backup.retainDays)`
+      )
+    );
+  }
   for (const b of candidates) {
     const note = b.type === "remote" ? c.dim("  [remote, push --delete]") : "";
     const state = b.merged
@@ -171,7 +221,14 @@ export async function pruneRepo(repo, cfg, opts = {}) {
   // Remote deletion only happens when the user passed --remote.
   const remoteToDo = opts.remote ? remote : [];
 
-  const summary = { repo, deletedLocal: [], deletedRemote: [], backups: [], errors: [] };
+  const summary = {
+    repo,
+    deletedLocal: [],
+    deletedRemote: [],
+    backups: [],
+    deletedBackups: removedBackups,
+    errors: [],
+  };
 
   if (mergedLocal.length > 0) {
     const msg = `Delete ${plural(mergedLocal.length, "merged local branch")}?`;

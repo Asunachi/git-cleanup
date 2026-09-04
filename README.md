@@ -78,8 +78,11 @@ Nothing is ever deleted automatically. Decisions are conservative:
   bundle in `<git dir>/git-cleanup-backups/` — so `-D` is no longer
   unrecoverable. Branches deleted with plain `-d` (ancestor-merged) stay
   reachable from the base and need no backup. A failed backup aborts the
-  deletion. Disable with `"backup": { "enabled": false }` or move bundles
-  via `"backup": { "dir": "/path" }`. Restore a bundled branch:
+  deletion. Disable with `"backup": { "enabled": false }`, move bundles via
+  `"backup": { "dir": "/path" }`, or set a retention window
+  (`"backup": { "retainDays": 90 }`) so `prune` sweeps bundles older than
+  that on every run (0, the default, keeps them forever). Restore a bundled
+  branch:
 
   ```bash
   git fetch .git/git-cleanup-backups/backup-*.bundle "+refs/heads/*:refs/heads/*"
@@ -209,10 +212,12 @@ Config files merge in this order (later wins):
   },
 
   // Safety net: bundle refs before -D / remote deletions (default on).
-  // "dir": null keeps bundles in <git dir>/git-cleanup-backups
+  // "dir": null keeps bundles in <git dir>/git-cleanup-backups.
+  // "retainDays": 0 keeps backups forever; >0 makes prune sweep older ones.
   "backup": {
     "enabled": true,
-    "dir": null
+    "dir": null,
+    "retainDays": 0
   },
 
   // Scan more than one repository at once (paths resolve relative to this file).

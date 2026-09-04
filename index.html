@@ -225,8 +225,8 @@
     <span class="warn">"closeStaleAfterDays"</span>: 60
   },
   <span class="warn">"remote"</span>: { <span class="warn">"pruneMerged"</span>: true, <span class="warn">"deleteAbandonedAfterDays"</span>: 0 },
-  <span class="ghost">// Safety net: bundles refs before -D / remote deletions (default on)</span>
-  <span class="warn">"backup"</span>: { <span class="warn">"enabled"</span>: true, <span class="warn">"dir"</span>: null },
+  <span class="ghost">// Safety net: bundles refs before -D / remote deletions (default on); retainDays > 0 sweeps old ones</span>
+  <span class="warn">"backup"</span>: { <span class="warn">"enabled"</span>: true, <span class="warn">"dir"</span>: null, <span class="warn">"retainDays"</span>: 0 },
   <span class="warn">"repos"</span>: [<span class="ok">"../other-project"</span>]
 }</pre>
 

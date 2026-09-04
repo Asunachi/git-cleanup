@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { makeSquashRepo, makeWorkRepo, sh } from "./helpers.mjs";
+import { DAY, makeSquashRepo, makeWorkRepo, sh } from "./helpers.mjs";
 import { analyzeRepo } from "../src/analyze.mjs";
 import { pruneRepo } from "../src/prune.mjs";
 import { defaults, VERDICTS } from "../src/classify.mjs";
@@ -210,6 +210,46 @@ test("backups can be disabled via config", async () => {
     assert.ok(summary.deletedLocal.includes("wip/stale"));
     assert.equal(summary.backups.length, 0);
     assert.ok(!existsSync(join(f.work, ".git", "git-cleanup-backups")));
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
+test("backup retention sweeps old bundles during prune, keeps fresh ones", async () => {
+  const f = fixture();
+  try {
+    const mkCfg = (retainDays) => {
+      const cfg = defaults();
+      cfg.rules = [{ match: "wip/*", mode: "any", minAgeDays: 10 }];
+      cfg.warnUnmergedAfterDays = 999;
+      if (retainDays !== null) cfg.backup = { retainDays };
+      return cfg;
+    };
+    // First prune creates a force bundle for wip/stale.
+    const s1 = await pruneRepo(await analyzeRepo(f.work, mkCfg(null)), mkCfg(null), { yes: true });
+    assert.equal(s1.backups.length, 1, String(s1.backups));
+    const oldBundle = s1.backups[0].file;
+    assert.ok(existsSync(oldBundle));
+
+    // Backdate it past the window and add a fresh copy that must survive.
+    const past = new Date(Date.now() - 30 * DAY);
+    utimesSync(oldBundle, past, past);
+    const freshBundle = oldBundle.replace(/-force\.bundle$/, "-force-copy.bundle");
+    copyFileSync(oldBundle, freshBundle);
+
+    // Second prune: wip/stale is gone (only a remote candidate is listed, not
+    // deleted without --remote) — retention still sweeps.
+    const s2 = await pruneRepo(await analyzeRepo(f.work, mkCfg(7)), mkCfg(7), { yes: true });
+    assert.ok(s2.deletedBackups.includes(oldBundle), String(s2.deletedBackups));
+    assert.ok(!existsSync(oldBundle), "old bundle should be removed");
+    assert.ok(existsSync(freshBundle), "fresh bundle should be kept");
+
+    // retainDays 0 (the default) keeps everything, even old bundles.
+    utimesSync(freshBundle, past, past);
+    const s3 = await pruneRepo(await analyzeRepo(f.work, mkCfg(null)), mkCfg(null), { yes: true });
+    assert.deepEqual(s3.deletedBackups, []);
+    assert.ok(existsSync(freshBundle));
   } finally {
     f.cleanup();
     repos.pop();

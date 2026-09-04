@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Backup retention: `backup.retainDays` (default 0 = keep forever) makes
+  `prune` sweep this repo's own `backup-*.bundle` files older than that many
+  days on every run, including no-op runs with nothing else to delete.
+  Unrelated files in a custom `backup.dir` are never touched.
+
 ## [0.2.2] - 2026-09-04
 
 ### Added

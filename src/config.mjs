@@ -119,6 +119,9 @@ export function normalizeConfig(raw) {
     const norm = {};
     if (b.enabled !== undefined) norm.enabled = checkBool(b.enabled, "backup.enabled");
     if (b.dir !== undefined && b.dir !== null) norm.dir = String(b.dir);
+    if (b.retainDays !== undefined && b.retainDays !== null) {
+      norm.retainDays = clampNum(b.retainDays, "backup.retainDays");
+    }
     out.backup = norm;
   }
   if (Array.isArray(raw.protected)) out.protected = [...raw.protected];
