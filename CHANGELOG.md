@@ -6,10 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-04
+
+Re-publish to clear an npm registry issue where the aggregate packument for
+this brand-new scoped package returned 404 (version, dist-tag, and tarball
+endpoints were unaffected). No code changes.
+
 ## [0.2.0] - 2026-09-04
 
-First npm release (package name `gitcleanup`; the npm `git-cleanup` name is
-held by an unrelated tool). The CLI binary stays `git-cleanup`.
+First npm release (package `@maliqkara/gitcleanup`; the unscoped npm
+`git-cleanup` name is held by an unrelated tool and npm blocks lookalikes).
+The CLI binary stays `git-cleanup`.
 
 ### Added
 

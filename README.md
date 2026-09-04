@@ -20,11 +20,12 @@ $ git-cleanup prs --close      # stale open PR automator
 
 ## Install
 
-The npm package is **`gitcleanup`** (the registry name `git-cleanup` is held
-by an unrelated project); the CLI command stays `git-cleanup`.
+The npm package is **`@maliqkara/gitcleanup`** (the unscoped name
+`git-cleanup` is held by an unrelated project, and npm blocks lookalikes);
+the CLI command stays `git-cleanup`.
 
 ```bash
-npm install -g gitcleanup    # adds the `git-cleanup` command to your PATH
+npm install -g @maliqkara/gitcleanup   # adds the `git-cleanup` command to PATH
 
 # then, inside any git repository:
 git-cleanup scan

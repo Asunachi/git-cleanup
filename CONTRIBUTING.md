@@ -53,10 +53,14 @@ only. Please keep it that way unless there is a very strong reason not to.
 
 ## Releasing
 
-The npm package is published as **`gitcleanup`** (the registry name
-`git-cleanup` is held by an unrelated project); the CLI command stays
-`git-cleanup`. npm history starts at 0.2.0; `CHANGELOG.md` and
-`package.json` always carry the same version.
+The npm package is published as **`@maliqkara/gitcleanup`** (the unscoped
+name `git-cleanup` is held by an unrelated project and npm blocks
+lookalikes); the CLI command stays `git-cleanup`. npm history starts at
+0.2.0; `CHANGELOG.md` and `package.json` always carry the same version.
+
+Publishing requires an npm account token with 2FA bypass (npmjs.com →
+Access Tokens → *Granular Access Token*, scoped to the package, with the
+2FA-bypass option ticked) when the account has two-factor auth enabled.
 
 1. Bump the version in `package.json` (semver) and move the matching
    `[Unreleased]` content in `CHANGELOG.md` into a dated release entry.
@@ -65,9 +69,5 @@ The npm package is published as **`gitcleanup`** (the registry name
    before anything goes out.
 3. `npm publish` runs `prepublishOnly` (`npm test`) and refuses to proceed if
    any test fails.
-4. If the npm account has two-factor auth enabled, publish with a token that
-   **bypasses 2FA**: npmjs.com → Access Tokens → *Granular Access Token*
-   scoped to the `gitcleanup` package with the 2FA-bypass option ticked
-   (plain tokens are rejected with 403 when 2FA is on).
-5. Tag the release on GitHub (`git tag vX.Y.Z && git push --tags`) and create
+4. Tag the release on GitHub (`git tag vX.Y.Z && git push --tags`) and create
    a GitHub Release from the matching CHANGELOG entry.

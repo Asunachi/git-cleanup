@@ -1,6 +1,7 @@
 {
-  "name": "gitcleanup",
-  "version": "0.2.0",
+  "name": "@maliqkara/gitcleanup",
+  "version": "0.2.1",
+  "publishConfig": { "access": "public" },
   "description": "Scan local and remote Git branches, cross-reference PR merge status, and safely prune stale/merged branches.",
   "license": "MIT",
   "author": { "name": "Maliq" },
