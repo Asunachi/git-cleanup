@@ -24,7 +24,7 @@ jobs:
           # Full history so the scan below sees real merge evidence.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -38,12 +38,18 @@ jobs:
       - name: The tarball contains the bin and sources
         shell: bash
         run: |
-          TARBALL=$(ls "$RUNNER_TEMP/pack"/*.tgz | head -1)
-          tar -tzf "$TARBALL" | grep -q 'bin/git-cleanup.mjs$' || {
+          # cd + relative names: on Windows, RUNNER_TEMP is a backslash path
+          # like D:\a\_temp, and GNU tar would parse "D:" as a remote host.
+          cd "$RUNNER_TEMP/pack"
+          TARBALL=$(ls *.tgz | head -1)
+          # Listing into a file (not a pipe): grep -q exits on first match,
+          # which SIGPIPEs tar and trips pipefail even when the content is fine.
+          tar -tzf "$TARBALL" > listing.txt
+          grep -q 'bin/git-cleanup.mjs$' listing.txt || {
             echo "bin/git-cleanup.mjs missing from tarball" >&2
             exit 1
           }
-          tar -tzf "$TARBALL" | grep -q 'src/cli.mjs$' || {
+          grep -q 'src/cli.mjs$' listing.txt || {
             echo "src/ missing from tarball" >&2
             exit 1
           }
@@ -51,7 +57,8 @@ jobs:
       - name: Install the tarball into a temp prefix
         shell: bash
         run: |
-          TARBALL=$(ls "$RUNNER_TEMP/pack"/*.tgz | head -1)
+          cd "$RUNNER_TEMP/pack"
+          TARBALL=$(ls *.tgz | head -1)
           npm install --prefix "$RUNNER_TEMP/prefix" "$TARBALL"
 
       - name: The bin shim resolves
