@@ -114,6 +114,13 @@ export function normalizeConfig(raw) {
     }
     out.remote = norm;
   }
+  if (raw.backup && typeof raw.backup === "object") {
+    const b = raw.backup;
+    const norm = {};
+    if (b.enabled !== undefined) norm.enabled = checkBool(b.enabled, "backup.enabled");
+    if (b.dir !== undefined && b.dir !== null) norm.dir = String(b.dir);
+    out.backup = norm;
+  }
   if (Array.isArray(raw.protected)) out.protected = [...raw.protected];
   if (Array.isArray(raw.rules)) {
     out.rules = raw.rules.map((rule, i) => {

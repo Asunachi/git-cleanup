@@ -2,6 +2,7 @@
 // gathered through the `git` binary so we never touch .git internals.
 
 import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { daysBetween, isoFromUnix } from "./util.mjs";
 
 export class GitError extends Error {}
@@ -42,6 +43,10 @@ export function resolveRef(cwd, ref) {
 export function repoMeta(cwd) {
   const root = git(["rev-parse", "--show-toplevel"], { cwd });
   if (!root.ok) return null;
+
+  // Common git dir (the .git directory shared by worktrees), absolutized.
+  const gd = git(["rev-parse", "--git-common-dir"], { cwd });
+  const gitDir = gd.ok ? resolve(root.out, gd.out) : null;
 
   const headRes = git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd });
   const head = headRes.ok ? headRes.out : null;
@@ -86,6 +91,7 @@ export function repoMeta(cwd) {
 
   return {
     root: root.out,
+    gitDir,
     headBranch: head,
     remotes,
     remoteDefault,

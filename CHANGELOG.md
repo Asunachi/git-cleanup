@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Backup safety net: before removing branches whose unique commits would be
+  lost — squash/rebase-merged (`-D`), force-rule (`-D`), and remote
+  (`push --delete`) deletions — their refs are written to a timestamped git
+  bundle under `<git dir>/git-cleanup-backups/`, so force deletions are
+  recoverable. Ancestor-merged branches deleted with plain `-d` stay
+  reachable from the base and are not bundled. A failed backup aborts the
+  deletion. Config: `backup.enabled` (default true) and `backup.dir`
+  (default: the git dir). `scan`/`prune` output shows the bundle path plus a
+  one-line restore command.
 - GitHub Action (`Asunachi/git-cleanup/.github/actions/scan-report`): runs
   `scan` on a schedule and keeps a single report issue up to date. Shallow
   CI checkouts are detected and unshallowed (with an explicit refspec that

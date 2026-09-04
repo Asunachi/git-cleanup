@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -166,6 +166,56 @@ test("force rules prune unmerged scratch branches", async () => {
   }
 });
 
+test("force-deleted branches are bundled first and restorable", async () => {
+  const f = fixture();
+  try {
+    const cfg = defaults();
+    cfg.rules = [{ match: "wip/*", mode: "any", minAgeDays: 10 }];
+    cfg.warnUnmergedAfterDays = 999;
+    const repo = await analyzeRepo(f.work, cfg);
+    const summary = await pruneRepo(repo, cfg, { yes: true });
+    // wip/stale force-deleted (-D), merged branches deleted with -d
+    assert.ok(summary.deletedLocal.includes("wip/stale"), String(summary.deletedLocal));
+    assert.ok(summary.deletedLocal.includes("feature/merged-old"));
+    // Only the -D deletion is backed up; -d keeps commits reachable from the base.
+    assert.equal(summary.backups.length, 1, String(summary.backups));
+    const bk = summary.backups[0];
+    assert.ok(bk.file.endsWith("-force.bundle"), bk.file);
+    assert.deepEqual(bk.branches, ["wip/stale"]);
+    assert.ok(existsSync(bk.file), bk.file);
+    sh(f.work, ["bundle", "verify", bk.file]); // throws on a broken bundle
+
+    // The deleted work is gone from the repo but recoverable from the bundle.
+    const localNames = listBranches(f.work, "heads").map((b) => b.name);
+    assert.ok(!localNames.includes("wip/stale"));
+    sh(f.work, ["fetch", bk.file, "+refs/heads/*:refs/heads/*"]);
+    const restored = listBranches(f.work, "heads").map((b) => b.name);
+    assert.ok(restored.includes("wip/stale"));
+    const blob = sh(f.work, ["cat-file", "-e", "wip/stale:stale.txt"]).ok;
+    assert.ok(blob, "stale.txt should be reachable from the restored branch");
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
+test("backups can be disabled via config", async () => {
+  const f = fixture();
+  try {
+    const cfg = defaults();
+    cfg.rules = [{ match: "wip/*", mode: "any", minAgeDays: 10 }];
+    cfg.backup = { enabled: false };
+    const repo = await analyzeRepo(f.work, cfg);
+    const summary = await pruneRepo(repo, cfg, { yes: true });
+    assert.ok(summary.deletedLocal.includes("wip/stale"));
+    assert.equal(summary.backups.length, 0);
+    assert.ok(!existsSync(join(f.work, ".git", "git-cleanup-backups")));
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
 test("CLI: scan --json and --check exit code", () => {
   const f = fixture();
   try {
@@ -236,6 +286,19 @@ test("squash-merged branches are detected by content and pruned safely", async (
     assert.ok(summary.deletedLocal.includes("feature/squash"));
     assert.deepEqual(summary.deletedRemote, ["origin/feature/squash"]);
     assert.equal(summary.errors.length, 0);
+    // -D local and push-delete remote branches were bundled before deletion.
+    const bkLocal = summary.backups.find((b) => b.file.endsWith("-squash.bundle"));
+    const bkRemote = summary.backups.find((b) => b.file.endsWith("-remote.bundle"));
+    assert.ok(bkLocal, String(summary.backups.map((b) => b.file)));
+    assert.ok(bkRemote, String(summary.backups.map((b) => b.file)));
+    assert.ok(
+      sh(f.work, ["bundle", "list-heads", bkLocal.file]).out.includes("refs/heads/feature/squash")
+    );
+    assert.ok(
+      sh(f.work, ["bundle", "list-heads", bkRemote.file]).out.includes(
+        "refs/remotes/origin/feature/squash"
+      )
+    );
 
     const localNames = listBranches(f.work, "heads").map((b) => b.name);
     assert.ok(!localNames.includes("feature/squash"));

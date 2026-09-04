@@ -48,6 +48,15 @@ export function defaults() {
       // whose last PR activity is older than this many days
       deleteAbandonedAfterDays: 0,
     },
+    backup: {
+      // Before force (-D) or remote deletions, write the deleted refs into a
+      // timestamped git bundle so the work stays recoverable. Merged local
+      // branches deleted with plain -d need no backup: their commits remain
+      // reachable from the base branch.
+      enabled: true,
+      // Directory for bundles; null = <git dir>/git-cleanup-backups
+      dir: null,
+    },
     repos: [],
   };
 }

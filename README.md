@@ -72,6 +72,18 @@ Nothing is ever deleted automatically. Decisions are conservative:
   (configurable via `remote.pruneMerged`) or PR-abandoned branches
   (`remote.deleteAbandonedAfterDays`).
 * In a non-interactive session (no TTY), prune refuses to run without `--yes`.
+* **Deletions that lose unique commits are backed up first.** Before removing
+  squash/rebase-merged branches (`-D`), force-rule branches (`-D`), or remote
+  branches (`git push --delete`), their refs are written to a timestamped git
+  bundle in `<git dir>/git-cleanup-backups/` — so `-D` is no longer
+  unrecoverable. Branches deleted with plain `-d` (ancestor-merged) stay
+  reachable from the base and need no backup. A failed backup aborts the
+  deletion. Disable with `"backup": { "enabled": false }` or move bundles
+  via `"backup": { "dir": "/path" }`. Restore a bundled branch:
+
+  ```bash
+  git fetch .git/git-cleanup-backups/backup-*.bundle "+refs/heads/*:refs/heads/*"
+  ```
 
 ## Usage
 
@@ -194,6 +206,13 @@ Config files merge in this order (later wins):
   "remote": {
     "pruneMerged": true,
     "deleteAbandonedAfterDays": 0 // >0 enables deleting remote branches whose PR closed unmerged
+  },
+
+  // Safety net: bundle refs before -D / remote deletions (default on).
+  // "dir": null keeps bundles in <git dir>/git-cleanup-backups
+  "backup": {
+    "enabled": true,
+    "dir": null
   },
 
   // Scan more than one repository at once (paths resolve relative to this file).

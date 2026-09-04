@@ -303,6 +303,15 @@ test("normalizeConfig clamps and validates", () => {
   );
 });
 
+test("backup config: enabled by default, normalizes, can be disabled", () => {
+  const d = defaults();
+  assert.equal(d.backup.enabled, true);
+  assert.equal(d.backup.dir, null);
+  assert.equal(normalizeConfig({ backup: { enabled: false } }).backup.enabled, false);
+  assert.equal(normalizeConfig({ backup: { dir: "/tmp/bk" } }).backup.dir, "/tmp/bk");
+  assert.throws(() => normalizeConfig({ backup: { enabled: "yes" } }), /true or false/);
+});
+
 test("config layers: defaults < cwd config < --config", () => {
   const dir = mkdtempSync(join(tmpdir(), "gc-cfg-"));
   try {

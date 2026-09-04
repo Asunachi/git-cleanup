@@ -2,6 +2,8 @@
 // interactive confirmation (or --yes on the command line).
 
 import { createInterface } from "node:readline";
+import { mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { git } from "./git.mjs";
 import { VERDICTS } from "./classify.mjs";
 import { c, plural } from "./util.mjs";
@@ -32,6 +34,56 @@ export async function confirmed(label, defaultYes, opts) {
     );
   }
   return ask(label, defaultYes);
+}
+
+// --- backups -----------------------------------------------------------------
+// Deletions that lose unique commits — force -D of unmerged work, the -D of
+// squash/rebase-merged branches (their SHAs are not in the base), and remote
+// push-deletes — first write the refs into a timestamped git bundle. Merged
+// local branches deleted with plain -d stay reachable from the base branch
+// and need no backup. Disable with config backup.enabled = false.
+
+function backupDir(repo, cfg) {
+  const dir = cfg.backup?.dir;
+  if (dir) return resolve(dir);
+  const gitDir = repo.meta?.gitDir ?? join(repo.root ?? ".", ".git");
+  return join(gitDir, "git-cleanup-backups");
+}
+
+/**
+ * Bundle `branches` (by full ref) into a fresh file, or return null when
+ * backups are disabled. Returns { file } or { error }.
+ */
+function backupBranches(repo, cfg, branches, tag) {
+  if (cfg.backup?.enabled === false || branches.length === 0) return { file: null };
+  const dir = backupDir(repo, cfg);
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (e) {
+    return { error: `cannot create backup dir ${dir}: ${e.message}` };
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const file = join(dir, `backup-${stamp}-${tag}.bundle`);
+  const r = git(["bundle", "create", file, ...branches.map((b) => b.ref)], {
+    cwd: repo.root,
+  });
+  if (!r.ok) return { error: r.err || `git bundle create failed` };
+  return { file };
+}
+
+function printBackupNote(file, tag) {
+  console.log(c.dim(`  💾 backed up → ${file}`));
+  if (tag === "remote") {
+    console.log(
+      c.dim(
+        `     restore: git fetch <bundle> "+refs/remotes/*:refs/remotes/*"  (then git push origin to restore on the server)`
+      )
+    );
+  } else {
+    console.log(
+      c.dim(`     restore: git fetch <bundle> "+refs/heads/*:refs/heads/*"  (from inside the repo)`)
+    );
+  }
 }
 
 function deleteLocalBranches(repo, branches) {
@@ -119,7 +171,7 @@ export async function pruneRepo(repo, cfg, opts = {}) {
   // Remote deletion only happens when the user passed --remote.
   const remoteToDo = opts.remote ? remote : [];
 
-  const summary = { repo, deletedLocal: [], deletedRemote: [], errors: [] };
+  const summary = { repo, deletedLocal: [], deletedRemote: [], backups: [], errors: [] };
 
   if (mergedLocal.length > 0) {
     const msg = `Delete ${plural(mergedLocal.length, "merged local branch")}?`;
@@ -143,9 +195,22 @@ export async function pruneRepo(repo, cfg, opts = {}) {
       "squash/rebase-merged local branch"
     )}?`;
     if (await confirmed(msg, true, opts)) {
-      const res = deleteLocalBranches(repo, contentLocal);
-      summary.deletedLocal.push(...res.done);
-      summary.errors.push(...res.errors);
+      const bk = backupBranches(repo, cfg, contentLocal, "squash");
+      if (bk.error) {
+        summary.errors.push({ name: "backup (squash)", error: bk.error });
+        console.error(c.red(`  ✗ backup failed — nothing deleted: ${bk.error}`));
+      } else {
+        if (bk.file) {
+          summary.backups.push({
+            file: bk.file,
+            branches: contentLocal.map((b) => b.name),
+          });
+          printBackupNote(bk.file, "local");
+        }
+        const res = deleteLocalBranches(repo, contentLocal);
+        summary.deletedLocal.push(...res.done);
+        summary.errors.push(...res.errors);
+      }
     } else {
       console.log(c.dim("  skipped."));
     }
@@ -159,9 +224,22 @@ export async function pruneRepo(repo, cfg, opts = {}) {
     );
     const msg = `Force-delete ${plural(forceLocal.length, "unmerged local branch")}?`;
     if (await confirmed(msg, false, opts)) {
-      const res = deleteLocalBranches(repo, forceLocal);
-      summary.deletedLocal.push(...res.done);
-      summary.errors.push(...res.errors);
+      const bk = backupBranches(repo, cfg, forceLocal, "force");
+      if (bk.error) {
+        summary.errors.push({ name: "backup (force)", error: bk.error });
+        console.error(c.red(`  ✗ backup failed — nothing deleted: ${bk.error}`));
+      } else {
+        if (bk.file) {
+          summary.backups.push({
+            file: bk.file,
+            branches: forceLocal.map((b) => b.name),
+          });
+          printBackupNote(bk.file, "local");
+        }
+        const res = deleteLocalBranches(repo, forceLocal);
+        summary.deletedLocal.push(...res.done);
+        summary.errors.push(...res.errors);
+      }
     } else {
       console.log(c.dim("  skipped."));
     }
@@ -170,9 +248,22 @@ export async function pruneRepo(repo, cfg, opts = {}) {
   if (remoteToDo.length > 0) {
     const msg = `Delete ${plural(remoteToDo.length, "remote branch")} (git push --delete)?`;
     if (await confirmed(msg, true, opts)) {
-      const res = deleteRemoteBranches(repo, remoteToDo);
-      summary.deletedRemote.push(...res.done);
-      summary.errors.push(...res.errors);
+      const bk = backupBranches(repo, cfg, remoteToDo, "remote");
+      if (bk.error) {
+        summary.errors.push({ name: "backup (remote)", error: bk.error });
+        console.error(c.red(`  ✗ backup failed — nothing deleted: ${bk.error}`));
+      } else {
+        if (bk.file) {
+          summary.backups.push({
+            file: bk.file,
+            branches: remoteToDo.map((b) => b.name),
+          });
+          printBackupNote(bk.file, "remote");
+        }
+        const res = deleteRemoteBranches(repo, remoteToDo);
+        summary.deletedRemote.push(...res.done);
+        summary.errors.push(...res.errors);
+      }
     } else {
       console.log(c.dim("  skipped."));
     }
