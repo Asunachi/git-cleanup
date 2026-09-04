@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 430" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
-  <!-- git-cleanup: animated demo. Loops every 18s. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 560" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+  <!-- git-cleanup: animated demo. Three scenes: scan, prune (with backup),
+       then the unattended CI report. Loops every 26s. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#10151d"/><stop offset="1" stop-color="#0a0e14"/>
@@ -8,57 +9,71 @@
       <stop offset="0" stop-color="#39c5cf"/><stop offset="1" stop-color="#3fb950"/>
     </linearGradient>
   </defs>
-  <rect width="780" height="430" rx="12" fill="url(#bg)" stroke="#2d333b" stroke-width="1.5"/>
+  <rect width="780" height="560" rx="12" fill="url(#bg)" stroke="#2d333b" stroke-width="1.5"/>
 
   <!-- window chrome -->
   <g>
-    <circle cx="26" cy="24" r="6" fill="#f85149"><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.02;1" dur="18s" begin="0s" repeatCount="indefinite"/></circle>
-    <circle cx="46" cy="24" r="6" fill="#d29922"><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.02;1" dur="18s" begin="0s" repeatCount="indefinite"/></circle>
-    <circle cx="66" cy="24" r="6" fill="#3fb950"><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.02;1" dur="18s" begin="0s" repeatCount="indefinite"/></circle>
+    <circle cx="26" cy="24" r="6" fill="#f85149"><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.02;1" dur="26s" begin="0s" repeatCount="indefinite"/></circle>
+    <circle cx="46" cy="24" r="6" fill="#d29922"><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.02;1" dur="26s" begin="0s" repeatCount="indefinite"/></circle>
+    <circle cx="66" cy="24" r="6" fill="#3fb950"><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.02;1" dur="26s" begin="0s" repeatCount="indefinite"/></circle>
     <text x="100" y="28" fill="#8b949e" font-size="12">git-cleanup — zsh — ~/work/repo</text>
   </g>
 
   <!-- ============ SCENE 1: scan ============ -->
   <g font-size="13">
-    <text x="24" y="66" fill="#3fb950" opacity="0"><tspan>$</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="0.6s" repeatCount="indefinite"/></text>
-    <text x="40" y="66" fill="#e6edf3" opacity="0"><tspan>git-cleanup scan --repo ~/work/repo</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="0.6s" repeatCount="indefinite"/></text>
+    <text x="24" y="66" fill="#3fb950" opacity="0"><tspan>$</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="0.6s" repeatCount="indefinite"/></text>
+    <text x="40" y="66" fill="#e6edf3" opacity="0"><tspan>git-cleanup scan --repo ~/work/repo</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="0.6s" repeatCount="indefinite"/></text>
 
-    <text x="24" y="90" fill="#8b949e" opacity="0"><tspan>scanning 12 branches (ancestor + content merge detection)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="1.5s" repeatCount="indefinite"/></text>
+    <text x="24" y="90" fill="#8b949e" opacity="0"><tspan>scanning 12 branches (ancestor + content merge detection)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="1.5s" repeatCount="indefinite"/></text>
     <rect x="24" y="97" width="0" height="5" rx="2.5" fill="url(#bar)" opacity="0">
-      <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.1;1" dur="18s" begin="1.5s" repeatCount="indefinite"/>
-      <animate attributeName="width" values="0;300;300" keyTimes="0;0.07;1" dur="18s" begin="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.1;1" dur="26s" begin="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="width" values="0;300;300" keyTimes="0;0.05;1" dur="26s" begin="1.5s" repeatCount="indefinite"/>
     </rect>
 
-    <text x="24" y="132" fill="#8b949e" opacity="0"><tspan>STATUS  BRANCH                      TYPE    AGE  MERGED  PR        REASON</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="3.0s" repeatCount="indefinite"/></text>
+    <text x="24" y="132" fill="#8b949e" opacity="0"><tspan>STATUS  BRANCH                      TYPE    AGE  MERGED  PR        REASON</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="3.0s" repeatCount="indefinite"/></text>
 
-    <text x="24" y="152" fill="#f85149" opacity="0"><tspan>PRUNE   feature/merged-old          local   60d  yes     merged#12  merged into base</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="3.5s" repeatCount="indefinite"/></text>
-    <text x="24" y="172" fill="#f85149" opacity="0"><tspan>PRUNE   origin/feature/merged-old2  remote  50d  yes     –          merged into base</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="4.0s" repeatCount="indefinite"/></text>
-    <text x="24" y="192" fill="#f85149" opacity="0"><tspan>PRUNE   feature/squash-landed       local   40d  (tree)  merged#7   content merged (squash)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="4.5s" repeatCount="indefinite"/></text>
-    <text x="24" y="212" fill="#d29922" opacity="0"><tspan>stale   wip/abandoned               local   100d no      closed#4   unmerged &amp; stale</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="5.0s" repeatCount="indefinite"/></text>
-    <text x="24" y="232" fill="#3fb950" opacity="0"><tspan>keep    feature/open-pr             local   21d  no      open#18    PR open — alive</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="5.5s" repeatCount="indefinite"/></text>
-    <text x="24" y="252" fill="#3fb950" opacity="0"><tspan>keep    main                        local   –    –       –          protected (HEAD)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="6.0s" repeatCount="indefinite"/></text>
+    <text x="24" y="152" fill="#f85149" opacity="0"><tspan>PRUNE   feature/merged-old          local   60d  yes     merged#12  merged into base</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="3.5s" repeatCount="indefinite"/></text>
+    <text x="24" y="172" fill="#f85149" opacity="0"><tspan>PRUNE   origin/feature/merged-old2  remote  50d  yes     –          merged into base</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="4.0s" repeatCount="indefinite"/></text>
+    <text x="24" y="192" fill="#f85149" opacity="0"><tspan>PRUNE   feature/squash-landed       local   40d  (tree)  merged#7   content merged (squash)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="4.5s" repeatCount="indefinite"/></text>
+    <text x="24" y="212" fill="#d29922" opacity="0"><tspan>stale   wip/abandoned               local   100d no      closed#4   unmerged &amp; stale</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="5.0s" repeatCount="indefinite"/></text>
+    <text x="24" y="232" fill="#3fb950" opacity="0"><tspan>keep    feature/open-pr             local   21d  no      open#18    PR open — alive</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="5.5s" repeatCount="indefinite"/></text>
+    <text x="24" y="252" fill="#3fb950" opacity="0"><tspan>keep    main                        local   –    –       –          protected (HEAD)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="6.0s" repeatCount="indefinite"/></text>
 
-    <text x="24" y="280" fill="#e6edf3" opacity="0"><tspan>3 prunable</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="6.8s" repeatCount="indefinite"/></text>
-    <text x="98" y="280" fill="#d29922" opacity="0"><tspan>· 1 stale</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="6.8s" repeatCount="indefinite"/></text>
-    <text x="158" y="280" fill="#3fb950" opacity="0"><tspan>· 8 kept</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="6.8s" repeatCount="indefinite"/></text>
+    <text x="24" y="280" fill="#e6edf3" opacity="0"><tspan>3 prunable</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="6.8s" repeatCount="indefinite"/></text>
+    <text x="98" y="280" fill="#d29922" opacity="0"><tspan>· 1 stale</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="6.8s" repeatCount="indefinite"/></text>
+    <text x="158" y="280" fill="#3fb950" opacity="0"><tspan>· 8 kept</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="6.8s" repeatCount="indefinite"/></text>
   </g>
 
   <!-- ============ SCENE 2: prune with backup ============ -->
   <g font-size="13">
-    <text x="24" y="318" fill="#3fb950" opacity="0"><tspan>$</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="9.2s" repeatCount="indefinite"/></text>
-    <text x="40" y="318" fill="#e6edf3" opacity="0"><tspan>git-cleanup prune --yes</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="9.2s" repeatCount="indefinite"/></text>
+    <text x="24" y="318" fill="#3fb950" opacity="0"><tspan>$</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="9.2s" repeatCount="indefinite"/></text>
+    <text x="40" y="318" fill="#e6edf3" opacity="0"><tspan>git-cleanup prune --yes</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="9.2s" repeatCount="indefinite"/></text>
 
-    <text x="24" y="342" fill="#c9d1d9" opacity="0"><tspan>• deleting feature/merged-old      (merged — git branch -d)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="10.0s" repeatCount="indefinite"/></text>
-    <text x="24" y="362" fill="#c9d1d9" opacity="0"><tspan>• deleting feature/squash-landed   (content merged — -D)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="10.6s" repeatCount="indefinite"/></text>
+    <text x="24" y="342" fill="#c9d1d9" opacity="0"><tspan>• deleting feature/merged-old      (merged — git branch -d)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="10.0s" repeatCount="indefinite"/></text>
+    <text x="24" y="362" fill="#c9d1d9" opacity="0"><tspan>• deleting feature/squash-landed   (content merged — -D)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="10.6s" repeatCount="indefinite"/></text>
 
-    <text x="24" y="386" fill="#39c5cf" opacity="0"><tspan>💾 backed up → .git/git-cleanup-backups/backup-…-squash.bundle</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="11.3s" repeatCount="indefinite"/></text>
-    <text x="24" y="404" fill="#8b949e" opacity="0"><tspan>   restore: git fetch &lt;bundle&gt; "+refs/heads/*:refs/heads/*"</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="11.7s" repeatCount="indefinite"/></text>
+    <text x="24" y="386" fill="#39c5cf" opacity="0"><tspan>💾 backed up → .git/git-cleanup-backups/backup-…-squash.bundle</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="11.3s" repeatCount="indefinite"/></text>
+    <text x="24" y="404" fill="#8b949e" opacity="0"><tspan>   restore: git fetch &lt;bundle&gt; "+refs/heads/*:refs/heads/*"</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="11.7s" repeatCount="indefinite"/></text>
 
-    <text x="24" y="424" fill="#3fb950" opacity="0"><tspan>✓ 3 local + 1 remote deleted · 0 errors · recovery bundles kept</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="18s" begin="12.6s" repeatCount="indefinite"/></text>
-
-    <!-- blinking cursor after the last line -->
-    <rect x="338" y="414" width="8" height="14" fill="#3fb950" opacity="0">
-      <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.45;0.5;1" dur="1.1s" begin="13.4s" repeatCount="indefinite"/>
-    </rect>
+    <text x="24" y="424" fill="#3fb950" opacity="0"><tspan>✓ 3 local + 1 remote deleted · 0 errors · recovery bundles kept</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="12.6s" repeatCount="indefinite"/></text>
   </g>
+
+  <!-- divider before the CI scene -->
+  <line x1="24" y1="440" x2="756" y2="440" stroke="#2d333b" opacity="0">
+    <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.06;1" dur="26s" begin="15.0s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- ============ SCENE 3: unattended CI report ============ -->
+  <g font-size="13">
+    <text x="24" y="462" fill="#d29922" opacity="0"><tspan>⏰ scheduled — .github/workflows/report.yml (weekly cron)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="15.4s" repeatCount="indefinite"/></text>
+    <text x="24" y="484" fill="#c9d1d9" opacity="0"><tspan>▸ shallow checkout (fetch-depth: 1) → fetching full history</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="16.2s" repeatCount="indefinite"/></text>
+    <text x="24" y="506" fill="#c9d1d9" opacity="0"><tspan>▸ git-cleanup scan --json · 3 prunable · 1 stale · 8 kept</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="17.0s" repeatCount="indefinite"/></text>
+    <text x="24" y="528" fill="#c9d1d9" opacity="0"><tspan>▸ posting report → issue #42 (one issue kept current)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="17.8s" repeatCount="indefinite"/></text>
+    <text x="24" y="550" fill="#3fb950" opacity="0"><tspan>✓ </tspan><tspan fill="#39c5cf">https://github.com/owner/repo/issues/42</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="18.6s" repeatCount="indefinite"/></text>
+  </g>
+
+  <!-- blinking cursor after the last line -->
+  <rect x="336" y="540" width="8" height="14" fill="#3fb950" opacity="0">
+    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.45;0.5;1" dur="1.1s" begin="19.4s" repeatCount="indefinite"/>
+  </rect>
 </svg>
