@@ -27,14 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backup retention: `backup.retainDays` (default 0 = keep forever) makes
   `prune` sweep this repo's own `backup-*.bundle` files older than that many
   days on every run, including no-op runs with nothing else to delete.
-  Unrelated files in a custom `backup.dir` are never touched.
-- Forge abstraction: PR enrichment now lives behind a provider interface
+  Unrelated files in a custom `backup.dir` are never touched.- Forge abstraction: PR enrichment now lives behind a provider interface
   (`src/forge.mjs` + `src/providers/github.mjs`); consumers read only a
   common PR shape, and remotes are detected by hostname. `scan --json` now
-  reports the active `provider`. GitLab remotes (gitlab.com and self-hosted
-  `*.gitlab.*` hosts) are recognized and degrade gracefully to pure-git
-  cleanup with a clear message until a provider lands. See the README
-  "Forge support" roadmap for the GitLab plan.
+  reports the active `provider`.
+- GitLab provider: merge requests are read over the GitLab REST API with a
+  `GITLAB_TOKEN` (`PRIVATE-TOKEN` header), keyed by source branch and mapped
+  to the common PR shape, so open/MR state cross-references work on gitlab.com
+  and self-hosted `*.gitlab.*` instances (API base derived from the remote
+  host, override with `GITLAB_API_BASE`). Closing an MR uses
+  `PUT /merge_requests/:iid` plus an optional note. Nested-group projects
+  (`group/sub/repo`) resolve correctly. See the README "Forge support"
+  section.
 
 ## [0.2.2] - 2026-09-04
 

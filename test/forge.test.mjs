@@ -84,7 +84,7 @@ test("providerFor returns null when no remote resolves", () => {
 test("closePR rejects unknown providers instead of guessing", async () => {
   await assert.rejects(
     () =>
-      closePR({ provider: "gitlab", owner: "o", repo: "r", source: "api", pr: {}, comment: "" }),
-    /no forge provider for "gitlab"/
+      closePR({ provider: "bitbucket", owner: "o", repo: "r", source: "api", pr: {}, comment: "" }),
+    /no forge provider for "bitbucket"/
   );
 });

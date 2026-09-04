@@ -29,15 +29,17 @@
 //
 // Remote detection is by hostname heuristic: github.com / gitlab.com /
 // *.gitlab.* self-hosted instances. A forge host with no registered provider
-// yields source "none" with a helpful error rather than a hard failure.
+// (e.g. bitbucket.org) yields source "none" with a helpful error rather than
+// a hard failure.
 
 import { spawnSync } from "node:child_process";
 import { githubProvider } from "./providers/github.mjs";
+import { gitlabProvider } from "./providers/gitlab.mjs";
 
-/** Registered providers, keyed by their id. Add GitLab/Bitbucket here. */
+/** Registered providers, keyed by their id. Add Bitbucket here. */
 export const providers = {
   github: githubProvider,
-  // gitlab: gitlabProvider,   // see README "Forge support" roadmap
+  gitlab: gitlabProvider,
 };
 
 export class ForgeError extends Error {}
