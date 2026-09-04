@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- GitLab provider: merge requests are read over the GitLab REST API with a
+  `GITLAB_TOKEN` (`PRIVATE-TOKEN` header), keyed by source branch and mapped
+  to the common PR shape, so open/MR state cross-references work on gitlab.com
+  and self-hosted `*.gitlab.*` instances (API base derived from the remote
+  host, override with `GITLAB_API_BASE`). Closing an MR uses
+  `PUT /merge_requests/:iid` plus an optional note. Nested-group projects
+  (`group/sub/repo`) resolve correctly. See the README "Forge support"
+  section.
+- CI now runs the test suite on Windows and macOS as well as Linux (Node
+  18/20/22 per OS), so git plumbing is verified cross-platform on every push.
+  A `release-check` workflow additionally packs the tarball, installs it into
+  a temp prefix, and runs the installed CLI on all three OSes — triggered by
+  `v*` tag pushes and on demand via `workflow_dispatch` before publishing
+  (see CONTRIBUTING "Releasing").
+
+### Fixed
+
+- The backup-retention test now sets the fresh bundle's mtime explicitly:
+  on Windows, `copyFileSync` (via `CopyFileW`) preserves the source file's
+  timestamps, so the "fresh" copy inherited the backdated mtime and the
+  retention sweep — correctly — removed it. The test failed only on the new
+  Windows CI leg; the sweep's behavior is unchanged.
+
 ## [0.2.3] - 2026-09-05
 
 ### Fixed
@@ -27,23 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backup retention: `backup.retainDays` (default 0 = keep forever) makes
   `prune` sweep this repo's own `backup-*.bundle` files older than that many
   days on every run, including no-op runs with nothing else to delete.
-  Unrelated files in a custom `backup.dir` are never touched.- Forge abstraction: PR enrichment now lives behind a provider interface
+  Unrelated files in a custom `backup.dir` are never touched.
+- Forge abstraction: PR enrichment now lives behind a provider interface
   (`src/forge.mjs` + `src/providers/github.mjs`); consumers read only a
   common PR shape, and remotes are detected by hostname. `scan --json` now
   reports the active `provider`.
-- GitLab provider: merge requests are read over the GitLab REST API with a
-  `GITLAB_TOKEN` (`PRIVATE-TOKEN` header), keyed by source branch and mapped
-  to the common PR shape, so open/MR state cross-references work on gitlab.com
-  and self-hosted `*.gitlab.*` instances (API base derived from the remote
-  host, override with `GITLAB_API_BASE`). Closing an MR uses
-  `PUT /merge_requests/:iid` plus an optional note. Nested-group projects
-  (`group/sub/repo`) resolve correctly. See the README "Forge support"
-  section.
-- CI now runs the suite on Windows and macOS as well as Linux (Node 18/20/22
-  per OS), and a `release-check` workflow packs the tarball, installs it into
-  a temp prefix, and runs the installed CLI on all three OSes — triggered by
-  `v*` tag pushes and available on demand via `workflow_dispatch` before
-  publishing (see CONTRIBUTING "Releasing").
 
 ## [0.2.2] - 2026-09-04
 
