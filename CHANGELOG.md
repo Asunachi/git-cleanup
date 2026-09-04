@@ -6,13 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-05
+
 ### Fixed
 
 - The scan-report action's outputs (`prunable`, `stale`, `kept`, `errors`,
   `issue-number`) are populated again: composite actions must map each
   declared output to a `value` from an inner step, which the v0.2.2 manifest
   omitted (the action ran and posted issues fine, but consumers reading
-  `steps.<id>.outputs.*` got empty strings). Shipped in v0.2.3.
+  `steps.<id>.outputs.*` got empty strings). Consumers pinning `@v0.2.2`
+  should re-pin to `@v0.2.3`.
 - A missing `gh` binary no longer reads as success: an uninstalled `gh`
   made the spawn return no status, which was treated as "worked" and
   reported `PRs via gh` with zero PRs, silently skipping the REST fallback.
@@ -27,10 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Unrelated files in a custom `backup.dir` are never touched.
 - Forge abstraction: PR enrichment now lives behind a provider interface
   (`src/forge.mjs` + `src/providers/github.mjs`); consumers read only a
-  common PR shape, and remotes are detected by hostname. GitLab remotes
-  (gitlab.com and self-hosted `*.gitlab.*` hosts) are recognized and degrade
-  gracefully to pure-git cleanup with a clear message until a provider lands.
-  See the README "Forge support" roadmap for the GitLab plan.
+  common PR shape, and remotes are detected by hostname. `scan --json` now
+  reports the active `provider`. GitLab remotes (gitlab.com and self-hosted
+  `*.gitlab.*` hosts) are recognized and degrade gracefully to pure-git
+  cleanup with a clear message until a provider lands. See the README
+  "Forge support" roadmap for the GitLab plan.
 
 ## [0.2.2] - 2026-09-04
 
