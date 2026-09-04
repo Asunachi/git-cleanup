@@ -41,8 +41,9 @@ Nothing is ever deleted automatically. Decisions are conservative:
 | **stale** | Unmerged and untouched for a long time, or an abandoned PR | never deleted automatically; review in `scan` |
 | **kept** | Protected (see below), the checked-out branch, a base branch, an open PR, or simply too young | — |
 
-* Merged = the branch tip is an ancestor of a base branch (`origin/main`,
-  `origin/<remote-default>`, or your configured long-lived branches). Unmerged
+* Merged = the branch tip is an ancestor of a base branch. Base branches are
+  each remote's default branch (resolved offline via `origin/HEAD`, the
+  checked-out branch's upstream, or well-known names like `main`). Unmerged
   work is **never** deleted unless it matches a `mode: "any"` force rule you
   wrote yourself.
 * Protected by default: `main master develop dev release release/** staging
@@ -120,10 +121,12 @@ Only open PRs older than `closeStaleAfterDays` (falls back to
 
 ## GitHub integration
 
-PR state enriches the scan: a merged PR makes its branch a PRUNE candidate
-even when the merge happened through a different base, a closed-unmerged PR
-marks the branch abandoned, and an open PR keeps the branch alive. git-cleanup
-uses, in order:
+PR state enriches the scan but never deletes anything by itself: an open PR
+keeps its branch alive, a merged or closed PR is shown for context, and a PR
+closed without merging can flag a remote branch as abandoned when you enable
+`remote.deleteAbandonedAfterDays`. Deleting a branch always requires git
+evidence (its tip is an ancestor of a base branch) or an explicit force rule.
+git-cleanup queries GitHub, in order:
 
 1. the **`gh` CLI** if installed and authenticated, or
 2. the **GitHub REST API** if `GITHUB_TOKEN` is set.

@@ -154,8 +154,9 @@ export function loadConfig({ configFile, repoFlags = [], cwd, homeFile = HOME_CO
   } catch {
     /* not present */
   }
-  if (home) {
-    cfg = deepMerge(cfg, normalizeConfig(readJSON(home)));
+  const homeJson = home ? readJSON(home) : null;
+  if (homeJson) {
+    cfg = deepMerge(cfg, normalizeConfig(homeJson));
     sources.push(home);
   }
 
@@ -163,31 +164,34 @@ export function loadConfig({ configFile, repoFlags = [], cwd, homeFile = HOME_CO
   // .gitcleanup.json is a lower-priority layer that the explicit file
   // overrides on top of (see the precedence list at the top of this file).
   const found = findUp(cwd);
-  if (found) {
-    cfg = deepMerge(cfg, normalizeConfig(readJSON(found)));
+  const foundJson = found ? readJSON(found) : null;
+  if (foundJson) {
+    cfg = deepMerge(cfg, normalizeConfig(foundJson));
     sources.push(found);
   }
 
   // Explicit --config file wins.
-  let baseDir = cwd;
-  if (configFile) {
-    cfg = deepMerge(cfg, normalizeConfig(readJSON(configFile)));
+  const explicitJson = configFile ? readJSON(configFile) : null;
+  if (explicitJson) {
+    cfg = deepMerge(cfg, normalizeConfig(explicitJson));
     sources.push(configFile);
-    baseDir = dirname(resolve(configFile));
-  } else if (found) {
-    baseDir = dirname(found);
-  } else if (home) {
-    baseDir = cwd; // home config: repos relative to where you run it
   }
+
+  // `repos` entries resolve relative to the directory of the highest-priority
+  // config layer that defines them (repos from the home config, or no config
+  // at all, resolve relative to the current directory).
+  let configDir = cwd;
+  if (explicitJson?.repos?.length) configDir = dirname(resolve(configFile));
+  else if (foundJson?.repos?.length) configDir = dirname(found);
 
   let repos;
   if (repoFlags.length > 0) {
     repos = repoFlags.map((p) => resolve(cwd, p));
   } else {
-    repos = (cfg.repos ?? []).map((p) => resolve(baseDir, p));
+    repos = (cfg.repos ?? []).map((p) => resolve(configDir, p));
     if (repos.length === 0) repos = [cwd];
   }
 
-  return { cfg, repos, configDir: baseDir, sources };
+  return { cfg, repos, configDir, sources };
 }
 

@@ -25,18 +25,20 @@ const USAGE = `git-cleanup ${VERSION} — prune stale/merged Git branches, cross
 Usage:
   git-cleanup [scan] [options]        report branches that can be cleaned up
   git-cleanup prune [options]         delete merged/stale branches (asks first)
-  git-cleanup prs [--close]           list open PRs stale for 30+ days
+  git-cleanup prs [--close]           list stale open PRs (default: 30+ days)
   git-cleanup --version | --help
 
 Options:
   -y, --yes              answer yes to every confirmation (for scripts/CI)
       --remote           also delete remote branches (git push --delete)
-      --repo <path>      analyze this repo instead of (or in addition to) cfg
-      --config <file>    use this config file
+      --repo <path>      analyze this repo (overrides any config "repos" list)
+      --config <file>    use this config file (highest-priority layer)
       --json             machine-readable output
       --check            exit code 2 when any branch is prunable
   -v, --verbose          show every branch (also clean ones)
       --no-pr            do not query GitHub for PR state
+      --close            (prs only) close stale open PRs, with confirmation
+  -V, --version          print the version
   -h, --help             show this help
 
 Exit codes: 0 ok · 1 error · 2 (with --check) cleanup needed

@@ -278,6 +278,28 @@ test("config layers: defaults < cwd config < --config", () => {
   }
 });
 
+test("repos resolve relative to the config layer that defines them", () => {
+  const dir = mkdtempSync(join(tmpdir(), "gc-cfg-"));
+  try {
+    // Repo-level config defines repos; an explicit --config without a repos
+    // list must not move the base directory to the explicit file's folder.
+    writeFileSync(join(dir, ".gitcleanup.json"), JSON.stringify({ repos: ["sub"] }));
+    const other = join(dir, "other");
+    mkdirSync(other, { recursive: true });
+    const explicit = join(other, "override.json");
+    writeFileSync(explicit, JSON.stringify({ deleteMergedAfterDays: 3 }));
+    const l = loadConfig({
+      cwd: dir,
+      configFile: explicit,
+      homeFile: join(dir, "no-home.json"),
+    });
+    assert.equal(l.cfg.deleteMergedAfterDays, 3);
+    assert.deepEqual(l.repos, [join(dir, "sub")]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("home config merges under cwd config", () => {
   const dir = mkdtempSync(join(tmpdir(), "gc-cfg-"));
   try {
