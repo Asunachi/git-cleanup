@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PUT /merge_requests/:iid` plus an optional note. Nested-group projects
   (`group/sub/repo`) resolve correctly. See the README "Forge support"
   section.
+- CI now runs the suite on Windows and macOS as well as Linux (Node 18/20/22
+  per OS), and a `release-check` workflow packs the tarball, installs it into
+  a temp prefix, and runs the installed CLI on all three OSes — triggered by
+  `v*` tag pushes and available on demand via `workflow_dispatch` before
+  publishing (see CONTRIBUTING "Releasing").
 
 ## [0.2.2] - 2026-09-04
 

@@ -1,0 +1,78 @@
+name: release-check
+
+# Pre-publish sanity gate: pack the exact tree a version tag points at,
+# install the tarball into a temp prefix, and run the installed CLI on
+# every OS. Runs automatically when a v* tag is pushed (the tree that npm
+# published) and on demand via workflow_dispatch (e.g. before publishing,
+# on the bump commit). See CONTRIBUTING "Releasing" for the full flow.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  verify-pack:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history so the scan below sees real merge evidence.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Pack the tarball
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          npm pack --pack-destination "$RUNNER_TEMP/pack"
+          ls -1 "$RUNNER_TEMP/pack"
+
+      - name: The tarball contains the bin and sources
+        shell: bash
+        run: |
+          TARBALL=$(ls "$RUNNER_TEMP/pack"/*.tgz | head -1)
+          tar -tzf "$TARBALL" | grep -q 'bin/git-cleanup.mjs$' || {
+            echo "bin/git-cleanup.mjs missing from tarball" >&2
+            exit 1
+          }
+          tar -tzf "$TARBALL" | grep -q 'src/cli.mjs$' || {
+            echo "src/ missing from tarball" >&2
+            exit 1
+          }
+
+      - name: Install the tarball into a temp prefix
+        shell: bash
+        run: |
+          TARBALL=$(ls "$RUNNER_TEMP/pack"/*.tgz | head -1)
+          npm install --prefix "$RUNNER_TEMP/prefix" "$TARBALL"
+
+      - name: The bin shim resolves
+        shell: bash
+        run: |
+          BIN="$RUNNER_TEMP/prefix/node_modules/.bin/git-cleanup"
+          test -e "$BIN" || { echo "missing bin shim: $BIN" >&2; exit 1; }
+
+      - name: The installed CLI runs and scans a real repo
+        shell: bash
+        run: |
+          PKG="$RUNNER_TEMP/prefix/node_modules/@maliqkara/gitcleanup"
+          node "$PKG/bin/git-cleanup.mjs" --version
+          node "$PKG/bin/git-cleanup.mjs" --help >/dev/null
+          # --check exits 2 when prunable branches exist (this repo usually has
+          # none); any code other than 0 or 2 is a real failure.
+          set +e
+          node "$PKG/bin/git-cleanup.mjs" scan --check --repo "$GITHUB_WORKSPACE" >/dev/null 2>&1
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            echo "scan --check exited $code (expected 0 or 2)" >&2
+            exit 1
+          fi

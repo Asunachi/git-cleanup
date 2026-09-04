@@ -86,7 +86,15 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
    (`git rev-parse vX.Y.Z^{commit}` must equal the bump commit). The release
    tag is also what consumers pin for the GitHub Action, so a version whose
    tree lacks a feature must not be presented as carrying it.
-5. Create a GitHub Release for the tag with notes from the matching
+5. **Verify the tarball on every OS before announcing the release.** The
+   `release-check` workflow (`.github/workflows/release-check.yml`) runs
+   automatically when the `v*` tag is pushed: it packs the exact tree the
+   tag points at, installs the tarball into a temp prefix, and runs the
+   installed CLI (`--version`, `--help`, and a real `scan --check`) on
+   Linux, macOS, and Windows. Wait for all three jobs to pass before
+   creating the GitHub Release. To check a tree *before* publishing (or to
+   re-run), use Actions → **release-check** → *Run workflow* on any branch.
+6. Create a GitHub Release for the tag with notes from the matching
    CHANGELOG entry and a link to the npm package
    (https://www.npmjs.com/package/@maliqkara/gitcleanup).
 
@@ -97,6 +105,8 @@ version) was tagged at `e275e99` only after later work had already landed on
 `main`. To tag an older published version retroactively, find the commit
 whose tree was published (its `package.json` shows that name + version) and
 run `git tag -a vX.Y.Z <sha> && git push origin vX.Y.Z`, then create its
-GitHub Release. Note that `v0.2.1`'s tree predates the GitHub Action, so
-`@v0.2.1` pins a CLI-only snapshot — `v0.2.2` (which ships the action) is the
-earliest tag that resolves `Asunachi/git-cleanup/.github/actions/scan-report`.
+GitHub Release. The retroactive tag push also triggers `release-check`, so
+wait for that workflow to pass on the old tree before creating the Release.
+Note that `v0.2.1`'s tree predates the GitHub Action, so `@v0.2.1` pins a
+CLI-only snapshot — `v0.2.2` (which ships the action) is the earliest tag
+that resolves `Asunachi/git-cleanup/.github/actions/scan-report`.
