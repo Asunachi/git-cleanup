@@ -33,6 +33,15 @@ The npm package is **`@maliqkara/gitcleanup`** (the unscoped name
 `git-cleanup` is held by an unrelated project, and npm blocks lookalikes);
 the CLI command stays `git-cleanup`.
 
+No install required to try it (pin `@latest` — npm ≥ 11's `npx` needs the
+explicit version to resolve a scoped package's bin):
+
+```bash
+npx -y @maliqkara/gitcleanup@latest scan
+```
+
+Or install it once:
+
 ```bash
 npm install -g @maliqkara/gitcleanup   # adds the `git-cleanup` command to PATH
 
@@ -322,6 +331,26 @@ Outputs: `prunable`, `stale`, `kept`, `errors`, `issue-number`; the full
 markdown report is also written to the step summary. Run it on a schedule
 or `workflow_dispatch` against the default branch — on pull-request events
 the checkout is the merge ref and the scan is less meaningful.
+
+## Performance
+
+Synthetic repositories with a linear base history plus a realistic branch mix
+(merged, stale-divergent, active), scanned offline with `scan --json --no-pr`
+on a single machine to isolate pure-Git cost (PR enrichment is network-bound
+and separate):
+
+| repo | base commits | branches | scan time |
+|---|---:|---:|---:|
+| small | 300 | 91 | 0.4 s |
+| medium | 1,200 | 361 | 1.5 s |
+| large | 3,000 | 751 | 3.2 s |
+
+Scaling is roughly linear in the number of branches — each branch costs one
+or two short `git` subprocesses (ancestry and content checks), and the base
+history is walked once for the tree index. Expect wall-clock times to vary
+with filesystem and repository size; on very large histories the single
+`git log --format=%T` walk dominates. `prune` adds only the cost of the
+deletions themselves plus a bundle write.
 
 ## Development
 

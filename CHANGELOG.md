@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `scan --json` no longer drops the `provider` field when it is `null`:
+  `null ?? undefined` collapsed the explicit "no forge provider consulted"
+  state (PRs off or an unrecognized remote) into an absent key, so consumers
+  could not distinguish it from a missing field.
+- The README no-install quick-start uses `npx -y @maliqkara/gitcleanup@latest`:
+  on npm ≥ 11 the bare `npx -y @maliqkara/gitcleanup` form fails to resolve a
+  scoped package's bin ("command not found") — the explicit `@latest` works.
+
+### Added
+
+- README "Performance" section with measured synthetic-repo scan times (0.4s
+  / 1.5s / 3.2s for 91 / 361 / 751 branches) and the scaling model.
+
 ## [0.2.4] - 2026-09-05
 
 ### Added

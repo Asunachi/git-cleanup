@@ -159,7 +159,10 @@ export function reposToJSON(repos, cfg) {
       remotes: r.meta?.remotes ?? undefined,
       pr: r.pr
         ? {
-            provider: r.pr.provider ?? undefined,
+            // null stays: it means "no forge provider consulted" (PRs off or
+            // an unrecognized remote), which consumers must be able to tell
+            // apart from a missing field.
+            provider: r.pr.provider ?? null,
             source: r.pr.source,
             repo: r.pr.repo,
             error: r.pr.error || undefined,
