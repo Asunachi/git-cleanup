@@ -11,22 +11,27 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [18, 20, 22]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Run the test suite
+        # bash so the suite behaves identically on every OS (Git Bash on
+        # Windows runners; `npm test` spawns git itself, never a shell).
+        shell: bash
         run: npm test
 
       - name: Smoke-check the CLI
+        shell: bash
         run: |
           node bin/git-cleanup.mjs --version
           node bin/git-cleanup.mjs --help >/dev/null
