@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+# Cancel outdated runs for the same branch so quick pushes don't queue up.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest

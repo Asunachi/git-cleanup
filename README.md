@@ -1,5 +1,7 @@
 # git-cleanup
 
+[![CI](https://github.com/Asunachi/git-cleanup/actions/workflows/ci.yml/badge.svg)](https://github.com/Asunachi/git-cleanup/actions/workflows/ci.yml)
+
 A zero-dependency CLI that keeps your Git workspace pristine: it scans local
 and remote branches, cross-references each branch's activity (last commit,
 merge status, upstream state) with its pull-request status on GitHub, then
@@ -21,7 +23,10 @@ $ git-cleanup prs --close      # stale open PR automator
 No dependencies to install — run straight from a checkout, or link it:
 
 ```bash
+git clone https://github.com/Asunachi/git-cleanup.git
+cd git-cleanup
 npm link          # adds `git-cleanup` to your PATH
+
 # or without installing:
 node bin/git-cleanup.mjs scan
 ```

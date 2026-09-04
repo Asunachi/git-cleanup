@@ -4,6 +4,11 @@
   "description": "Scan local and remote Git branches, cross-reference PR merge status, and safely prune stale/merged branches.",
   "license": "MIT",
   "author": { "name": "Maliq" },
+  "homepage": "https://github.com/Asunachi/git-cleanup",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Asunachi/git-cleanup.git"
+  },
   "type": "module",
   "bin": {
     "git-cleanup": "./bin/git-cleanup.mjs"
