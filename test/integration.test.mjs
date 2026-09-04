@@ -233,10 +233,14 @@ test("backup retention sweeps old bundles during prune, keeps fresh ones", async
     assert.ok(existsSync(oldBundle));
 
     // Backdate it past the window and add a fresh copy that must survive.
+    // (On Windows, copyFileSync preserves the source's timestamps, so the
+    // fresh copy's mtime must be set explicitly — otherwise the retention
+    // sweep would rightly treat it as old.)
     const past = new Date(Date.now() - 30 * DAY);
     utimesSync(oldBundle, past, past);
     const freshBundle = oldBundle.replace(/-force\.bundle$/, "-force-copy.bundle");
     copyFileSync(oldBundle, freshBundle);
+    utimesSync(freshBundle, new Date(), new Date());
 
     // Second prune: wip/stale is gone (only a remote candidate is listed, not
     // deleted without --remote) — retention still sweeps.
