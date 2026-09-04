@@ -98,7 +98,10 @@
   button.chip.shuffle { border-color: rgba(163,113,247,.5); color: var(--violet); }
   button.chip.shuffle:hover { background: rgba(163,113,247,.12); }
 
-  .axis { display: flex; justify-content: space-between; color: var(--dim); font: 10px var(--mono); margin: 14px 0 2px; }
+  .axis { position: relative; height: 13px; color: var(--dim); font: 10px var(--mono); margin: 14px 0 2px; }
+  .axis .mk { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+  .axis .mk.oldest { transform: none; left: 0; color: var(--dim); }
+  .axis .mk.now { left: 100%; transform: translateX(-100%); color: var(--green); }
   .branches { border-top: 1px solid var(--border); }
   .brow {
     display: grid; grid-template-columns: 230px 1fr 118px; gap: 14px; align-items: center;
@@ -227,7 +230,15 @@
       </div>
     </div>
 
-    <div class="axis"><span>last touched →</span><span>180d</span><span>120d</span><span>60d</span><span>now</span></div>
+    <div class="axis">
+      <span class="mk oldest">← oldest · last touch (180d)</span>
+      <span class="mk" style="left:16.667%">150d</span>
+      <span class="mk" style="left:33.333%">120d</span>
+      <span class="mk" style="left:50%">90d</span>
+      <span class="mk" style="left:66.667%">60d</span>
+      <span class="mk" style="left:83.333%">30d</span>
+      <span class="mk now">now</span>
+    </div>
     <div class="branches" id="rows"></div>
 
     <div class="summary" id="summary"></div>
@@ -586,9 +597,13 @@
         reason = 'force rule "' + (v.rule || "?") + '" matched — delete even unmerged';
       }
       if (v.verdict === "delete" && isRemote) reason += " · needs prune --remote";
-      // timeline geometry: track spans 180d ago (left) → now (right)
+      // timeline geometry: track spans oldest (left, 180d ago) → now (right).
+      // A branch last touched `age` days ago sits at x = (180 - age)/180, with
+      // its bar extending to "now" — old branches are long, fresh ones are a
+      // short sliver at the right edge.
       var max = 180;
-      var left = (b.ageDays / max) * 100;
+      var pct = Math.max(0, Math.min(max, b.ageDays));
+      var left = Math.min(100 - (pct / max) * 100, 99.4);
       var width = 100 - left;
       return { b: b, v: v, label: label, reason: reason, left: left, width: width, typeChip: typeChip, prChip: prChip, i: i };
     });

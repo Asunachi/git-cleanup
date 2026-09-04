@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The playground's timeline bars were mirrored: a branch last touched `age`
+  days ago was drawn starting at `age/180` of the track, so old branches
+  looked fresh and vice versa. Bars now start at `(180 − age)/180` (oldest
+  left → now right) and the axis markers align with the gridlines.
 - `scan --json` no longer drops the `provider` field when it is `null`:
   `null ?? undefined` collapsed the explicit "no forge provider consulted"
   state (PRs off or an unrecognized remote) into an absent key, so consumers
