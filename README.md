@@ -291,6 +291,13 @@ Pin `@v0.2.3` as shown; use `@main` only if you want the action to track
 unreleased changes. (`v0.2.1`'s tree predates the action, so it cannot be
 used to pin it.)
 
+**About the report issue you may see on this repo:** this repository's own
+demo workflow (`.github/workflows/report.yml`) dogfoods the action on a
+schedule and keeps a single issue titled `git-cleanup: branch report`
+current. That issue is **machine-generated and not a bug report** — the
+action creates it on the first run and updates it in place on every run
+after. Please don't file bug reports against it; open a fresh issue instead.
+
 **Shallow checkouts are handled automatically.** CI clones default to
 `fetch-depth: 1`, which hides history from merge detection (both ancestor
 and squash/rebase checks). The action detects that, fetches full history
