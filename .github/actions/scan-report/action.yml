@@ -1,0 +1,65 @@
+name: "git-cleanup scan report"
+description: >-
+  Scan a git repository for prunable/stale branches and post an unattended
+  report. Works on shallow CI checkouts by fetching full history first.
+author: Maliq
+branding:
+  icon: "git-branch"
+  color: "purple"
+
+inputs:
+  path:
+    description: >-
+      Directory of the git repository to scan. Defaults to the workflow
+      checkout (".").
+    required: false
+    default: "."
+  unshallow:
+    description: >-
+      When the checkout is shallow (the CI default), fetch full history first
+      so ancestor and squash/rebase merge detection are accurate. Set to
+      "false" if your checkout step already uses fetch-depth: 0.
+    required: false
+    default: "true"
+  report:
+    description: >-
+      Where to post the report. "issue" keeps a single issue with this exact
+      title up to date; "none" only logs the report and writes the step
+      summary.
+    required: false
+    default: "issue"
+  issue-title:
+    description: "Exact title of the report issue this action owns."
+    required: false
+    default: "git-cleanup: branch report"
+  token:
+    description: >-
+      GitHub token with issues: write permission. Defaults to the automatic
+      GITHUB_TOKEN when the workflow grants that permission.
+    required: false
+    default: ""
+
+outputs:
+  prunable:
+    description: "Branches that git-cleanup would prune."
+  stale:
+    description: "Branches flagged stale (never deleted automatically)."
+  kept:
+    description: "Branches kept."
+  errors:
+    description: "Repositories that could not be scanned."
+  issue-number:
+    description: "Report issue created or updated (when report: issue)."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Scan and report
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_UNSHALLOW: ${{ inputs.unshallow }}
+        INPUT_REPORT: ${{ inputs.report }}
+        INPUT_ISSUE_TITLE: ${{ inputs.issue-title }}
+        INPUT_TOKEN: ${{ inputs.token }}
+      run: bash "${GITHUB_ACTION_PATH}/run.sh"

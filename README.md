@@ -229,6 +229,55 @@ git-cleanup prs --close --yes   # only if you configured closeStaleAfterDays
 carries `verdict` (`delete` | `warn` | `keep`), `reason`, `ageDays`, `merged`,
 `orphan`, and PR info when available. Stable for piping into your own tooling.
 
+## GitHub Action: unattended scan reports
+
+A composite action (`Asunachi/git-cleanup/.github/actions/scan-report`) runs
+`git-cleanup scan` on a schedule and keeps a single report issue up to date,
+so branches that go stale while nobody is looking still get seen:
+
+```yaml
+name: branch report
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"     # weekly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write             # required to create/update the report issue
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Asunachi/git-cleanup/.github/actions/scan-report@main
+        with:
+          path: .
+          report: issue
+          issue-title: "git-cleanup: branch report"
+```
+
+Pin to a release tag (e.g. `@v0.2.2` once cut) rather than `@main` if you
+want the action frozen to a specific version.
+
+**Shallow checkouts are handled automatically.** CI clones default to
+`fetch-depth: 1`, which hides history from merge detection (both ancestor
+and squash/rebase checks). The action detects that, fetches full history
+(`git fetch --unshallow`) with an explicit refspec covering every remote
+branch, and only then scans — set `unshallow: "false"` if your checkout
+step already uses `fetch-depth: 0`. If unshallowing fails the action warns
+and still reports, but merge detection may be incomplete.
+
+Inputs: `path` (default `.`), `unshallow` (default `true`), `report`
+(`issue` keeps one issue with the exact `issue-title` updated per run,
+`none` logs only), `issue-title`, `token` (defaults to `GITHUB_TOKEN`).
+Outputs: `prunable`, `stale`, `kept`, `errors`, `issue-number`; the full
+markdown report is also written to the step summary. Run it on a schedule
+or `workflow_dispatch` against the default branch — on pull-request events
+the checkout is the merge ref and the scan is less meaningful.
+
 ## Development
 
 ```bash

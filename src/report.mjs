@@ -185,6 +185,7 @@ export function reposToJSON(repos, cfg) {
           : undefined,
         verdict: b.verdict,
         reason: b.reason,
+        rule: b.rule || undefined,
       })),
     })),
   };

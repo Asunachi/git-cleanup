@@ -104,6 +104,7 @@ export function makeSquashRepo() {
   sh(work, ["push", "-q", "origin", "feature/squash"]);
   sh(work, ["push", "-q", "origin", "feature/divergent"]);
   sh(work, ["push", "-q", "origin", "feature/noop"]);
+  sh(work, ["remote", "set-head", "origin", "-a"]);
 
   return {
     base,
@@ -161,6 +162,11 @@ export function makeWorkRepo(defaultBranch = "main") {
   sh(work, ["push", "-q", "origin", "feature/merged-old2"]);
   sh(work, ["push", "-q", "origin", "release/v1"]);
   sh(work, ["push", "-q", "origin", "wip/stale"]);
+
+  // Real clones carry refs/remotes/origin/HEAD; make the fixtures match so
+  // the symbolic-HEAD ref is exercised (regression: it used to surface as a
+  // phantom remote branch named after the remote).
+  sh(work, ["remote", "set-head", "origin", "-a"]);
 
   return {
     base,

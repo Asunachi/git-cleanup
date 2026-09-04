@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Action (`Asunachi/git-cleanup/.github/actions/scan-report`): runs
+  `scan` on a schedule and keeps a single report issue up to date. Shallow
+  CI checkouts are detected and unshallowed (with an explicit refspec that
+  covers every remote branch) before scanning, so merge detection sees full
+  history; `unshallow: false` opts out when the checkout already uses
+  `fetch-depth: 0`.
+- `rule` is now included in `scan --json` output so rule-based reasons are
+  self-describing for downstream consumers.
+
+### Fixed
+
+- Remote symbolic HEAD refs (`refs/remotes/<remote>/HEAD`) are no longer
+  listed as a phantom branch named after the remote. `%(refname:short)`
+  renders those refs as just `origin`, so the old `/HEAD` suffix filter
+  never matched and every normally-cloned repo showed a phantom `origin`
+  branch (old enough, it was even flagged prunable). Filtering now happens
+  on the full ref name; integration fixtures clone and set `origin/HEAD`
+  like real repos to keep this covered.
+
 ## [0.2.1] - 2026-09-04
 
 Re-publish to clear an npm registry issue where the aggregate packument for

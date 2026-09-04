@@ -1,0 +1,25 @@
+name: branch report
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 03:00 UTC. The scan fetches full history on the runner,
+    # so the repo checkout step can stay at the default shallow depth.
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan branches and report
+        uses: ./.github/actions/scan-report
+        with:
+          path: .
+          report: issue
+          issue-title: "git-cleanup: branch report"

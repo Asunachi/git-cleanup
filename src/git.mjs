@@ -92,7 +92,8 @@ export function repoMeta(cwd) {
   };
 }
 
-const FORMAT = "%(refname:short)%1f%(objectname)%1f%(committerdate:unix)%1f%(HEAD)";
+const FORMAT =
+  "%(refname)%1f%(refname:short)%1f%(objectname)%1f%(committerdate:unix)%1f%(HEAD)";
 
 /**
  * Enumerate branches.
@@ -106,11 +107,13 @@ export function listBranches(cwd, kind) {
   const out = [];
   for (const line of r.out.split("\n")) {
     if (!line) continue;
-    const [name, sha, unix, headMarker] = line.split("\u001f");
-    if (kind === "remotes" && name.endsWith("/HEAD")) continue; // symbolic HEAD
+    const [full, name, sha, unix, headMarker] = line.split("\u001f");
+    // Each remote has a symbolic refs/remotes/<remote>/HEAD. %(refname:short)
+    // renders it as just the remote name, so filter on the full ref instead.
+    if (kind === "remotes" && full.endsWith("/HEAD")) continue;
     out.push({
       name,
-      ref: `${prefix}/${name}`,
+      ref: full,
       sha,
       commitUnix: Number(unix) || 0,
       isHead: headMarker === "*",
