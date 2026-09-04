@@ -62,4 +62,7 @@ runs:
         INPUT_REPORT: ${{ inputs.report }}
         INPUT_ISSUE_TITLE: ${{ inputs.issue-title }}
         INPUT_TOKEN: ${{ inputs.token }}
+        # The runner does not export GITHUB_TOKEN automatically; wire the
+        # caller's token through so the report issue can be posted.
+        GH_TOKEN: ${{ github.token }}
       run: bash "${GITHUB_ACTION_PATH}/run.sh"
