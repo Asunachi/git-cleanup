@@ -9,7 +9,16 @@ safely prunes what is genuinely dead — merged branches past an age threshold,
 abandoned remote branches, and scratch branches you opted into deleting.
 
 Built on the `git` binary only (never touches `.git` internals) with optional
-GitHub enrichment via `gh` CLI or `GITHUB_TOKEN`. Requires **Node.js ≥ 18**.
+GitHub and GitLab enrichment via `gh` CLI or a `GITHUB_TOKEN`/`GITLAB_TOKEN`.
+Requires **Node.js ≥ 18**.
+
+<p align="center">
+  <img src="demo.svg" alt="git-cleanup: scan &amp; prune demo" width="100%" />
+</p>
+
+**Try the [interactive playground](index.html)** — a simulated repo running the
+real decision engine in your browser: drag the age thresholds and watch every
+branch re-classify live.
 
 ```
 $ git-cleanup scan

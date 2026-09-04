@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `v*` tag pushes and on demand via `workflow_dispatch` before publishing
   (see CONTRIBUTING "Releasing").
 
+- The demo page (`index.html`) is rebuilt as an interactive playground: a
+  simulated repo rendered as a live branch graph that re-classifies every
+  branch as you drag the age thresholds (faithful port of `src/classify.mjs`),
+  a CLI-mirror of the current state, a squash-detection explainer, plus the
+  glob and config demos. The README now embeds an animated SVG terminal demo
+  (`demo.svg`) and links the playground.
+
 ### Fixed
 
 - The backup-retention test now sets the fresh bundle's mtime explicitly:
