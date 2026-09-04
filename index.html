@@ -285,6 +285,8 @@
     mergedRule: "merged and past its rule's minAgeDays",
     mergedRuleYoung: "merged but below its rule's minAgeDays — kept",
     tooYoung: "merged recently — below the age threshold",
+    squashMerged: "content already merged into base via squash/rebase",
+    contentYoung: "content in base but rewritten recently — below the age threshold",
     openPr: "PR open (with recent activity)",
     stalePr: "PR open but stale",
     staleUnmerged: "unmerged and stale — review before deciding",
@@ -317,8 +319,8 @@
       if (ruleHits && rule.mode === "any" && input.age >= (rule.minAgeDays || 0)) {
         out.verdict = "delete"; out.reason = "ruleForce";
         out.ruleName = rule.match;
-      } else if (input.merged) {
-        // A matching merged-mode rule owns the threshold for its branches:
+      } else if (input.merged || input.squash) {
+        // A matching merged-mode rule owns the threshold for these branches:
         // it can raise OR lower the generic 21-day default.
         if (ruleHits && rule.mode === "merged") {
           if (input.age >= (rule.minAgeDays != null ? rule.minAgeDays : 0)) {
@@ -327,9 +329,9 @@
             out.verdict = "keep"; out.reason = "mergedRuleYoung";
           }
         } else if (input.age >= 21) {
-          out.verdict = "delete"; out.reason = "merged";
+          out.verdict = "delete"; out.reason = input.merged ? "merged" : "squashMerged";
         } else {
-          out.verdict = "keep"; out.reason = "tooYoung";
+          out.verdict = "keep"; out.reason = input.merged ? "tooYoung" : "contentYoung";
         }
       } else if (input.prState === "open" || input.prState === "open-stale") {
         if (input.prState === "open") { out.verdict = "keep"; out.reason = "openPr"; }
@@ -359,6 +361,7 @@
       type: document.getElementById("d-type").value,
       age: parseInt(ageInput.value, 10),
       merged: document.getElementById("d-merged").checked,
+      squash: document.getElementById("d-squash").checked,
       prState: document.getElementById("d-pr").value,
       head: document.getElementById("d-head").checked,
       rule: document.getElementById("d-rule").value
@@ -380,7 +383,7 @@
       + '<span class="tag ' + cls + '">' + tag + '</span>'
       + '<span class="ghost">  →  ' + escapeHtml(reasonText) + "</span>";
     if (r.remoteGate) {
-      html += '<div class="ghost" style="margin-top:6px">remote branch — deletion additionally requires <b>git-cleanup prune --remote</b> (merged or abandoned only).</div>';
+      html += '<div class="ghost" style="margin-top:6px">remote branch — deletion additionally requires <b>git-cleanup prune --remote</b> (merged incl. squash/rebase, or abandoned only).</div>';
     }
     outEl.innerHTML = html;
   }
@@ -399,14 +402,20 @@
   });
   ageInput.addEventListener("input", render);
 
-  // merged checkbox was omitted from markup; inject next to HEAD checkbox
+  // merge checkboxes were omitted from markup; inject next to HEAD checkbox
   (function () {
     var head = document.getElementById("d-head");
+    var headLabel = head.closest("label");
     var merged = document.createElement("label");
     merged.setAttribute("class", "f");
     merged.innerHTML = '<input type="checkbox" id="d-merged" style="accent-color:var(--cyan); vertical-align:-2px" checked /> merged into base branch';
-    head.closest("label").parentNode.insertBefore(merged, head.closest("label"));
+    var squash = document.createElement("label");
+    squash.setAttribute("class", "f");
+    squash.innerHTML = '<input type="checkbox" id="d-squash" style="accent-color:var(--cyan); vertical-align:-2px" /> squash/rebase-merged (content in base)';
+    headLabel.parentNode.insertBefore(merged, headLabel);
+    headLabel.parentNode.insertBefore(squash, headLabel);
     document.getElementById("d-merged").addEventListener("change", render);
+    document.getElementById("d-squash").addEventListener("change", render);
   })();
 
   // ---- glob demo -------------------------------------------------------------

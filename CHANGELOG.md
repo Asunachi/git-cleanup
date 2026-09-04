@@ -6,7 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Squash/rebase-aware merge detection: branches whose tip tree already exists
+  in a base branch's history are recognized as merged (their commits were
+  rewritten), reported with a dedicated reason, and cleaned up locally with
+  `-D` and remotely via `--remote` behind their own confirmation prompt.
+- `repos` entries in config now resolve relative to the config layer that
+  defines them, matching the documented behavior when multiple layers are in
+  play.
+
+### Fixed
+
+- `npm test` now uses test-runner auto-discovery, which works identically on
+  Node 18/20/22 (`node --test test/` is rejected by Node 22).
 
 ## [0.1.0] - 2026-09-04
 

@@ -46,12 +46,18 @@ Nothing is ever deleted automatically. Decisions are conservative:
   checked-out branch's upstream, or well-known names like `main`). Unmerged
   work is **never** deleted unless it matches a `mode: "any"` force rule you
   wrote yourself.
+* Squash/rebase merges are detected by **content**: when a branch's tip tree
+  already exists somewhere in a base branch's history, the branch is treated
+  as merged even though its commit SHAs were rewritten. Because ancestry is
+  absent those refs are removed with `-D` — safe here, since every file of
+  the branch already lives in the base branch.
 * Protected by default: `main master develop dev release release/** staging
   qa trunk`, every base branch, the currently checked-out branch, and anything
   matching your `protected` list. A remote branch is protected by the same
   names (`release/**` protects `origin/release/v1`).
-* Local cleanup uses `git branch -d` (refuses on unmerged branches) unless a
-  force rule applies; then `-D` is used and you get a louder confirmation.
+* Local cleanup uses `git branch -d` for ancestor merges; squash/rebase-merged
+  and force-rule branches are removed with `-D` (content preserved in the
+  base, or explicitly opted in), each behind its own confirmation.
 * Remote cleanup only runs with `--remote` and only for merged branches
   (configurable via `remote.pruneMerged`) or PR-abandoned branches
   (`remote.deleteAbandonedAfterDays`).
@@ -125,7 +131,9 @@ PR state enriches the scan but never deletes anything by itself: an open PR
 keeps its branch alive, a merged or closed PR is shown for context, and a PR
 closed without merging can flag a remote branch as abandoned when you enable
 `remote.deleteAbandonedAfterDays`. Deleting a branch always requires git
-evidence (its tip is an ancestor of a base branch) or an explicit force rule.
+evidence — its tip is an ancestor of a base branch, or its final tree
+already exists in base history (the squash/rebase fingerprint) — or an
+explicit force rule.
 git-cleanup queries GitHub, in order:
 
 1. the **`gh` CLI** if installed and authenticated, or
@@ -224,6 +232,7 @@ exit codes).
 * GitHub-only for PR data (Bitbucket/GitLab remotes work for git-based
   cleanup; PR enrichment is skipped).
 * Age is measured from the tip commit of each branch.
-* Merge detection is one-directional (branch tip is an ancestor of a base);
-  it does not detect reverted-then-merged or squashed work with a rewritten
-  branch, which is why PR status and your review of `stale` rows matter.
+* Merge detection is ancestry- or content-based (tip tree found in base
+  history), which covers squash and rebase merges. It cannot detect merges
+  whose code changed afterwards (e.g. cherry-picks that were amended), which
+  is why PR status and your review of `stale` rows matter.

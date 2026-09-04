@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { makeWorkRepo, sh } from "./helpers.mjs";
+import { makeSquashRepo, makeWorkRepo, sh } from "./helpers.mjs";
 import { analyzeRepo } from "../src/analyze.mjs";
 import { pruneRepo } from "../src/prune.mjs";
 import { defaults, VERDICTS } from "../src/classify.mjs";
@@ -18,6 +18,11 @@ const BIN = join(ROOT, "bin", "git-cleanup.mjs");
 const repos = [];
 function fixture(defaultBranch) {
   const f = makeWorkRepo(defaultBranch);
+  repos.push(f);
+  return f;
+}
+function fixture2() {
+  const f = makeSquashRepo();
   repos.push(f);
   return f;
 }
@@ -189,6 +194,47 @@ test("CLI: scan --json and --check exit code", () => {
 
     const warn = runCli(["prs", "--json", "--repo", f.work]);
     assert.equal(warn.status, 0);
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
+test("squash-merged branches are detected by content and pruned safely", async () => {
+  const f = fixture2();
+  try {
+    const cfg = defaults();
+    const repo = await analyzeRepo(f.work, cfg);
+
+    const squash = byName(repo, "feature/squash");
+    assert.equal(squash.merged, false); // not an ancestor merge
+    assert.equal(squash.contentMerged, true);
+    assert.equal(squash.verdict, VERDICTS.DELETE);
+    assert.equal(squash.reason, "squash-merged");
+
+    const remoteSquash = byName(repo, "origin/feature/squash");
+    assert.equal(remoteSquash.contentMerged, true);
+    assert.equal(remoteSquash.verdict, VERDICTS.DELETE);
+    assert.equal(remoteSquash.reason, "squash-merged");
+
+    // Genuinely divergent work must NOT be flagged as merged.
+    const divergent = byName(repo, "feature/divergent");
+    assert.equal(divergent.contentMerged, false);
+    assert.notEqual(divergent.verdict, VERDICTS.DELETE);
+
+    const summary = await pruneRepo(repo, cfg, { yes: true, remote: true });
+    assert.ok(summary.deletedLocal.includes("feature/squash"));
+    assert.deepEqual(summary.deletedRemote, ["origin/feature/squash"]);
+    assert.equal(summary.errors.length, 0);
+
+    const localNames = listBranches(f.work, "heads").map((b) => b.name);
+    assert.ok(!localNames.includes("feature/squash"));
+    assert.ok(localNames.includes("feature/divergent"));
+    assert.ok(localNames.includes("main"));
+
+    const remoteHeads = sh(f.work, ["ls-remote", "--heads", "origin"]).out;
+    assert.ok(!remoteHeads.includes("refs/heads/feature/squash"));
+    assert.ok(remoteHeads.includes("refs/heads/feature/divergent"));
   } finally {
     f.cleanup();
     repos.pop();

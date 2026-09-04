@@ -8,6 +8,8 @@ import {
   remoteNameOf,
   repoMeta,
   resolveRef,
+  treeOf,
+  treeSetForBaseRefs,
   upstreamOf,
 } from "./git.mjs";
 import { classify, classifyRemote, VERDICTS } from "./classify.mjs";
@@ -49,7 +51,10 @@ export async function analyzeRepo(repoPath, cfg) {
   const baseShort = new Set(baseRefs.map((b) => b.split("/").pop()));
   const mergedSet =
     baseRefs.length > 0 ? mergedShaSet(root, baseRefs) : new Set();
-
+  // All commit-tree hashes in base history: a branch whose tip tree appears
+  // here was squash/rebase-merged into the base even though its SHAs weren't.
+  const contentTrees =
+    baseRefs.length > 0 ? treeSetForBaseRefs(root, baseRefs) : new Set();
   const localBranches = listBranches(root, "heads");
   const remoteBranches = listBranches(root, "remotes");
   const remoteShort = new Set(
@@ -78,6 +83,7 @@ export async function analyzeRepo(repoPath, cfg) {
       ageDays: daysBetween(nowSec, b.commitUnix),
       isHead: b.isHead,
       merged: mergedSet.has(b.sha),
+      contentMerged: Boolean(!mergedSet.has(b.sha) && contentTrees.has(treeOf(root, b.name))),
       orphan: Boolean(
         hasRemotes && !upstream && !remoteShort.has(b.name)
       ),
@@ -108,6 +114,7 @@ export async function analyzeRepo(repoPath, cfg) {
       ageDays: daysBetween(nowSec, b.commitUnix),
       isHead: false,
       merged: mergedSet.has(b.sha),
+      contentMerged: Boolean(!mergedSet.has(b.sha) && contentTrees.has(treeOf(root, b.name))),
       orphan: false,
       upstream: null,
       pr: pr.source !== "none" ? bestPR(pr.prs, short) ?? null : null,

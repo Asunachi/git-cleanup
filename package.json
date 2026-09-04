@@ -16,11 +16,13 @@
   "exports": {
     ".": "./src/index.mjs"
   },
+  "files": ["bin", "src", "README.md", "LICENSE", "CHANGELOG.md"],
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "git",

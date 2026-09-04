@@ -53,5 +53,15 @@ only. Please keep it that way unless there is a very strong reason not to.
 
 ## Releasing
 
-Bump the version in `package.json`, add an entry to `CHANGELOG.md`, tag the
-release, and publish if applicable.
+1. Bump the version in `package.json` (semver) and add an entry to
+   `CHANGELOG.md`.
+2. Run `npm publish --dry-run` first: the `files` field keeps the tarball to
+   `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
+   before anything goes out.
+3. `npm publish` runs `prepublishOnly` (`npm test`) automatically and refuses
+   to proceed if any test fails.
+4. Tag the release on GitHub (`git tag vX.Y.Z && git push --tags`) and create
+   a GitHub Release from the matching CHANGELOG entry.
+
+Global installs from the npm registry (`npm i -g git-cleanup`) work once a
+version is published; until then, `npm link` from a clone is the path.

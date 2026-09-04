@@ -5,8 +5,11 @@ import { VERDICTS } from "./classify.mjs";
 
 export function reasonLabel(branch) {
   const r = branch.reason;
-  if (r === "merged") return branch.type === "local" ? "merged into base" : "merged into base";
-  if (r === "merged-rule") return `rule "${branch.rule}" matched`;
+  if (r === "merged") return "merged into base";
+  if (r === "merged-rule") return `rule "${branch.rule}" matched (merged)`;
+  if (r === "squash-merged") return "content merged into base (squash/rebase)";
+  if (r === "squash-rule") return `rule "${branch.rule}" matched (squash/rebase)`;
+  if (r === "content-young") return "content in base, below age threshold";
   if (r === "rule-force") return `force rule "${branch.rule}"`;
   if (r === "stale-unmerged")
     return branch.orphan
@@ -111,8 +114,9 @@ export function printRepoReport(repo, cfg, opts = {}) {
         : b.verdict === VERDICTS.WARN
           ? c.yellow(cellName)
           : cellName;
+    const integrated = b.merged || b.contentMerged;
     out.push(
-      `  ${cellStatus}${name}${pad(b.type, typeW)}${pad(`${b.ageDays}d`, ageW)}${pad(b.merged ? "yes" : "-", 7)}${pad(prShort(b.pr, verbose), 16)}${c.dim(reasonLabel(b))}`
+      `  ${cellStatus}${name}${pad(b.type, typeW)}${pad(`${b.ageDays}d`, ageW)}${pad(integrated ? "yes" : "-", 7)}${pad(prShort(b.pr, verbose), 16)}${c.dim(reasonLabel(b))}`
     );
   }
 
@@ -166,6 +170,7 @@ export function reposToJSON(repos, cfg) {
         ageDays: b.ageDays,
         lastCommitUnix: b.commitUnix,
         merged: b.merged,
+        contentMerged: b.contentMerged || undefined,
         orphan: b.orphan || undefined,
         upstream: b.upstream || undefined,
         pr: b.pr

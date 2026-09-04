@@ -201,6 +201,54 @@ test("merged-mode rule can RAISE the generic threshold", () => {
   assert.equal(other.reason, "merged");
 });
 
+test("squash/rebase-merged branches are prunable past the threshold", () => {
+  const cfg = defaults();
+  const d = classify(
+    branch({ contentMerged: true, ageDays: 60 }),
+    cfg,
+    ctx()
+  );
+  assert.equal(d.verdict, VERDICTS.DELETE);
+  assert.equal(d.reason, "squash-merged");
+
+  const young = classify(branch({ contentMerged: true, ageDays: 5 }), cfg, ctx());
+  assert.equal(young.verdict, VERDICTS.KEEP);
+  assert.equal(young.reason, "content-young");
+});
+
+test("merged-mode rules apply to squash/rebase branches too", () => {
+  const cfg = defaults();
+  cfg.rules = [{ match: "feature/ci-*", mode: "merged", minAgeDays: 7 }];
+  const d = classify(
+    branch({ name: "feature/ci-1", shortName: "feature/ci-1", contentMerged: true, ageDays: 10 }),
+    cfg,
+    ctx()
+  );
+  assert.equal(d.verdict, VERDICTS.DELETE);
+  assert.equal(d.reason, "squash-rule");
+
+  const young = classify(
+    branch({ name: "feature/ci-1", shortName: "feature/ci-1", contentMerged: true, ageDays: 2 }),
+    cfg,
+    ctx()
+  );
+  assert.equal(young.verdict, VERDICTS.KEEP);
+  assert.equal(young.reason, "rule-young");
+});
+
+test("remote cleanup gate: content-merged remote branches", () => {
+  const cfg = defaults();
+  const remote = {
+    ...branch({ type: "remote", name: "origin/x", shortName: "x", ageDays: 60, contentMerged: true }),
+    remoteName: "origin",
+  };
+  const g = classifyRemote(remote, cfg);
+  assert.equal(g?.verdict, VERDICTS.DELETE);
+  assert.equal(g?.reason, "squash-merged");
+  cfg.remote.pruneMerged = false;
+  assert.equal(classifyRemote(remote, cfg), null);
+});
+
 test("remote cleanup gate: merged past threshold only when enabled", () => {
   const cfg = defaults();
   const remote = { ...branch({ type: "remote", name: "origin/x", shortName: "x", ageDays: 30, merged: true }), remoteName: "origin" };

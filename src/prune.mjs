@@ -97,11 +97,12 @@ export async function pruneRepo(repo, cfg, opts = {}) {
   console.log(c.bold(`\n📦 ${repo.path}`));
   for (const b of candidates) {
     const note = b.type === "remote" ? c.dim("  [remote, push --delete]") : "";
-    console.log(
-      `  ${c.red("•")} ${c.red(b.name)}  ${c.dim(
-        `${b.ageDays}d old${b.merged ? ", merged" : ", NOT merged"}`
-      )}${note}`
-    );
+    const state = b.merged
+      ? ", merged"
+      : b.contentMerged
+        ? ", content merged (squash/rebase)"
+        : ", NOT merged";
+    console.log(`  ${c.red("•")} ${c.red(b.name)}  ${c.dim(`${b.ageDays}d old${state}`)}${note}`);
   }
   if (!opts.remote && remote.length > 0) {
     console.log(
@@ -112,7 +113,8 @@ export async function pruneRepo(repo, cfg, opts = {}) {
   }
 
   const mergedLocal = local.filter((b) => b.merged);
-  const forceLocal = local.filter((b) => !b.merged);
+  const contentLocal = local.filter((b) => !b.merged && b.contentMerged);
+  const forceLocal = local.filter((b) => !b.merged && !b.contentMerged);
 
   // Remote deletion only happens when the user passed --remote.
   const remoteToDo = opts.remote ? remote : [];
@@ -123,6 +125,25 @@ export async function pruneRepo(repo, cfg, opts = {}) {
     const msg = `Delete ${plural(mergedLocal.length, "merged local branch")}?`;
     if (await confirmed(msg, true, opts)) {
       const res = deleteLocalBranches(repo, mergedLocal);
+      summary.deletedLocal.push(...res.done);
+      summary.errors.push(...res.errors);
+    } else {
+      console.log(c.dim("  skipped."));
+    }
+  }
+
+  if (contentLocal.length > 0) {
+    console.log(
+      c.dim(
+        `  these look squash/rebase-merged: the branch tip's tree already exists in a base branch, but the original commits were rewritten.`
+      )
+    );
+    const msg = `Delete ${plural(
+      contentLocal.length,
+      "squash/rebase-merged local branch"
+    )}?`;
+    if (await confirmed(msg, true, opts)) {
+      const res = deleteLocalBranches(repo, contentLocal);
       summary.deletedLocal.push(...res.done);
       summary.errors.push(...res.errors);
     } else {

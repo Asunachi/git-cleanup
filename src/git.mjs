@@ -159,6 +159,33 @@ export function mergedShaSet(cwd, baseRefs) {
   return merged;
 }
 
+/** Tree object hash of a ref's tip commit (or null when unresolvable). */
+export function treeOf(cwd, ref) {
+  const r = git(["rev-parse", "--verify", "--quiet", `${ref}^{tree}`], { cwd });
+  return r.ok ? r.out : null;
+}
+
+/**
+ * Set of every commit-tree hash reachable from the base refs.
+ *
+ * Content-level merge detection: when a branch's tip tree equals one of these
+ * trees, the branch's final content already lives in the base history — the
+ * typical fingerprint of a squash or rebase merge, where the original commit
+ * SHAs were rewritten and ancestor detection cannot see them.
+ */
+export function treeSetForBaseRefs(cwd, baseRefs) {
+  const set = new Set();
+  for (const base of baseRefs) {
+    const r = git(["log", "--format=%T", base], { cwd });
+    if (!r.ok) continue;
+    for (const line of r.out.split("\n")) {
+      const h = line.trim();
+      if (h) set.add(h);
+    }
+  }
+  return set;
+}
+
 /** Local branch probe: upstream ref (or null) and whether the remote branch still exists. */
 export function upstreamOf(cwd, name) {
   const r = git(

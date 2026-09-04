@@ -93,20 +93,35 @@ export function classify(branch, cfg, ctx) {
     return { verdict: VERDICTS.DELETE, reason: "rule-force", rule: rule.match };
   }
 
-  // 3. Merged work: the safe, default cleanup path. A matching merged-mode
-  // rule fully owns the threshold for that branch (it can raise OR lower the
-  // generic deleteMergedAfterDays), so do not fall through to the generic one.
-  if (branch.merged) {
+  // 3. Integrated work: the safe, default cleanup path. Two flavors:
+  //   merged        - tip is an ancestor of a base branch (regular merge)
+  //   contentMerged - tip tree already exists in base history (squash/rebase)
+  // A matching merged-mode rule fully owns the threshold for that branch (it
+  // can raise OR lower the generic deleteMergedAfterDays), so do not fall
+  // through to the generic one.
+  const integrated = branch.merged || branch.contentMerged;
+  if (integrated) {
+    const ancestor = Boolean(branch.merged);
     if (rule && rule.mode === "merged") {
       if (branch.ageDays >= ruleAge(rule, cfg)) {
-        return { verdict: VERDICTS.DELETE, reason: "merged-rule", rule: rule.match };
+        return {
+          verdict: VERDICTS.DELETE,
+          reason: ancestor ? "merged-rule" : "squash-rule",
+          rule: rule.match,
+        };
       }
       return { verdict: VERDICTS.KEEP, reason: "rule-young" };
     }
     if (branch.ageDays >= cfg.deleteMergedAfterDays) {
-      return { verdict: VERDICTS.DELETE, reason: "merged" };
+      return {
+        verdict: VERDICTS.DELETE,
+        reason: ancestor ? "merged" : "squash-merged",
+      };
     }
-    return { verdict: VERDICTS.KEEP, reason: "too-young" };
+    return {
+      verdict: VERDICTS.KEEP,
+      reason: ancestor ? "too-young" : "content-young",
+    };
   }
 
   // 4. Unmerged branches.
@@ -133,10 +148,13 @@ export function classify(branch, cfg, ctx) {
  * not eligible for remote cleanup under the current config.
  */
 export function classifyRemote(branch, cfg) {
-  if (branch.merged) {
+  if (branch.merged || branch.contentMerged) {
     if (!cfg.remote.pruneMerged) return null;
     if (branch.ageDays >= cfg.deleteMergedAfterDays) {
-      return { verdict: VERDICTS.DELETE, reason: "merged" };
+      return {
+        verdict: VERDICTS.DELETE,
+        reason: branch.merged ? "merged" : "squash-merged",
+      };
     }
     return null;
   }

@@ -21,7 +21,7 @@ export function sh(cwd, args, opts = {}) {
   return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
 }
 
-function identEnv(date) {
+export function identEnv(date) {
   const env = {
     GIT_AUTHOR_NAME: "Test",
     GIT_AUTHOR_EMAIL: "test@example.com",
@@ -54,6 +54,56 @@ export function merge(cwd, current, branch, { date = Date.now() } = {}) {
   sh(cwd, ["merge", "-q", "--no-ff", branch, "-m", `merge ${branch}`], {
     env: identEnv(date),
   });
+}
+
+/**
+ * Build a repo where one branch was squash-merged into the default branch
+ * (its content committed on main WITHOUT merging history) and one branch is
+ * genuinely divergent. Returns { base, work, cleanup }.
+ */
+export function makeSquashRepo() {
+  const base = mkdtempSync(join(tmpdir(), "git-cleanup-test-"));
+  const bare = join(base, "origin.git");
+  const work = join(base, "work");
+  sh(null, ["init", "-q", "-b", "main", "--bare", bare]);
+  sh(null, ["clone", "-q", bare, work]);
+  sh(work, ["config", "user.name", "Test"]);
+  sh(work, ["config", "user.email", "test@example.com"]);
+
+  const now = Date.now();
+  commit(work, "main", { "README.md": "root" }, { msg: "initial" });
+
+  // Feature work that later lands on main as a squash commit (new SHA, same tree).
+  commit(work, "feature/squash", { "sq.txt": "squashed" }, {
+    date: now - 40 * DAY,
+    msg: "feature work (later squashed)",
+  });
+  sh(work, ["checkout", "-q", "main"]);
+  writeFileSync(join(work, "sq.txt"), "squashed");
+  sh(work, ["add", "-A"]);
+  sh(work, ["commit", "-q", "-m", "Squash feature/squash (#1)"], {
+    env: identEnv(now - 35 * DAY),
+  });
+
+  // Genuinely abandoned, never integrated work (must NOT be flagged merged).
+  commit(work, "feature/divergent", { "other.txt": "unique" }, {
+    date: now - 100 * DAY,
+    msg: "abandoned divergent work",
+  });
+
+  sh(work, ["checkout", "-q", "main"]);
+  sh(work, ["push", "-q", "origin", "main"]);
+  sh(work, ["push", "-q", "origin", "feature/squash"]);
+  sh(work, ["push", "-q", "origin", "feature/divergent"]);
+
+  return {
+    base,
+    bare,
+    work,
+    cleanup() {
+      rmSync(base, { recursive: true, force: true });
+    },
+  };
 }
 
 /**
