@@ -222,6 +222,16 @@ test("squash-merged branches are detected by content and pruned safely", async (
     assert.equal(divergent.contentMerged, false);
     assert.notEqual(divergent.verdict, VERDICTS.DELETE);
 
+    // Net-empty branch (tree equals main's tree, but never integrated) must
+    // NOT be flagged either: the merge-base guard excludes it.
+    const noop = byName(repo, "feature/noop");
+    assert.equal(noop.contentMerged, false);
+    assert.notEqual(noop.verdict, VERDICTS.DELETE);
+
+    const remoteNoop = byName(repo, "origin/feature/noop");
+    assert.equal(remoteNoop.contentMerged, false);
+    assert.notEqual(remoteNoop.verdict, VERDICTS.DELETE);
+
     const summary = await pruneRepo(repo, cfg, { yes: true, remote: true });
     assert.ok(summary.deletedLocal.includes("feature/squash"));
     assert.deepEqual(summary.deletedRemote, ["origin/feature/squash"]);
@@ -230,11 +240,13 @@ test("squash-merged branches are detected by content and pruned safely", async (
     const localNames = listBranches(f.work, "heads").map((b) => b.name);
     assert.ok(!localNames.includes("feature/squash"));
     assert.ok(localNames.includes("feature/divergent"));
+    assert.ok(localNames.includes("feature/noop"));
     assert.ok(localNames.includes("main"));
 
     const remoteHeads = sh(f.work, ["ls-remote", "--heads", "origin"]).out;
     assert.ok(!remoteHeads.includes("refs/heads/feature/squash"));
     assert.ok(remoteHeads.includes("refs/heads/feature/divergent"));
+    assert.ok(remoteHeads.includes("refs/heads/feature/noop"));
   } finally {
     f.cleanup();
     repos.pop();

@@ -3,13 +3,13 @@
 import { existsSync } from "node:fs";
 import {
   defaultBaseRefs,
+  isContentMerged,
   listBranches,
   mergedShaSet,
   remoteNameOf,
   repoMeta,
   resolveRef,
-  treeOf,
-  treeSetForBaseRefs,
+  treeIndexForBaseRefs,
   upstreamOf,
 } from "./git.mjs";
 import { classify, classifyRemote, VERDICTS } from "./classify.mjs";
@@ -53,8 +53,9 @@ export async function analyzeRepo(repoPath, cfg) {
     baseRefs.length > 0 ? mergedShaSet(root, baseRefs) : new Set();
   // All commit-tree hashes in base history: a branch whose tip tree appears
   // here was squash/rebase-merged into the base even though its SHAs weren't.
-  const contentTrees =
-    baseRefs.length > 0 ? treeSetForBaseRefs(root, baseRefs) : new Set();
+  // (Lazily consulted per branch; see isContentMerged for the guard.)
+  const treeIndex =
+    baseRefs.length > 0 ? treeIndexForBaseRefs(root, baseRefs) : null;
   const localBranches = listBranches(root, "heads");
   const remoteBranches = listBranches(root, "remotes");
   const remoteShort = new Set(
@@ -83,7 +84,11 @@ export async function analyzeRepo(repoPath, cfg) {
       ageDays: daysBetween(nowSec, b.commitUnix),
       isHead: b.isHead,
       merged: mergedSet.has(b.sha),
-      contentMerged: Boolean(!mergedSet.has(b.sha) && contentTrees.has(treeOf(root, b.name))),
+      contentMerged: Boolean(
+        !mergedSet.has(b.sha) &&
+          treeIndex !== null &&
+          isContentMerged(root, b.name, baseRefs, treeIndex)
+      ),
       orphan: Boolean(
         hasRemotes && !upstream && !remoteShort.has(b.name)
       ),
@@ -114,7 +119,11 @@ export async function analyzeRepo(repoPath, cfg) {
       ageDays: daysBetween(nowSec, b.commitUnix),
       isHead: false,
       merged: mergedSet.has(b.sha),
-      contentMerged: Boolean(!mergedSet.has(b.sha) && contentTrees.has(treeOf(root, b.name))),
+      contentMerged: Boolean(
+        !mergedSet.has(b.sha) &&
+          treeIndex !== null &&
+          isContentMerged(root, b.name, baseRefs, treeIndex)
+      ),
       orphan: false,
       upstream: null,
       pr: pr.source !== "none" ? bestPR(pr.prs, short) ?? null : null,

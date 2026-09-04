@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in a base branch's history are recognized as merged (their commits were
   rewritten), reported with a dedicated reason, and cleaned up locally with
   `-D` and remotely via `--remote` behind their own confirmation prompt.
+  Net-empty branches — no-op commits or fully reverted work whose tree merely
+  matches an old base state — are excluded via a merge-base guard, so only
+  content that genuinely differs from a branch's starting point is flagged.
 - `repos` entries in config now resolve relative to the config layer that
   defines them, matching the documented behavior when multiple layers are in
   play.

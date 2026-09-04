@@ -91,10 +91,19 @@ export function makeSquashRepo() {
     msg: "abandoned divergent work",
   });
 
+  // Net-empty branch: a no-op commit whose tree equals main's current tree.
+  // Its tree matches a base tree, but its "work" was never integrated, so the
+  // content guard (merge-base tree must differ) must NOT flag it as merged.
+  sh(work, ["checkout", "-q", "-B", "feature/noop", "main"]);
+  sh(work, ["commit", "-q", "--allow-empty", "-m", "noop"], {
+    env: identEnv(now - 80 * DAY),
+  });
+
   sh(work, ["checkout", "-q", "main"]);
   sh(work, ["push", "-q", "origin", "main"]);
   sh(work, ["push", "-q", "origin", "feature/squash"]);
   sh(work, ["push", "-q", "origin", "feature/divergent"]);
+  sh(work, ["push", "-q", "origin", "feature/noop"]);
 
   return {
     base,

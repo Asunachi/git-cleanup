@@ -166,24 +166,49 @@ export function treeOf(cwd, ref) {
 }
 
 /**
- * Set of every commit-tree hash reachable from the base refs.
+ * Index every commit-tree hash reachable from the base refs, mapping each
+ * tree to the indexes of the bases whose history contains it.
  *
- * Content-level merge detection: when a branch's tip tree equals one of these
- * trees, the branch's final content already lives in the base history — the
- * typical fingerprint of a squash or rebase merge, where the original commit
- * SHAs were rewritten and ancestor detection cannot see them.
+ * Content-level merge detection: a branch whose tip tree appears in a base's
+ * history is the fingerprint of a squash or rebase merge — the original
+ * commit SHAs were rewritten, so pure ancestor detection cannot see them.
  */
-export function treeSetForBaseRefs(cwd, baseRefs) {
-  const set = new Set();
-  for (const base of baseRefs) {
+export function treeIndexForBaseRefs(cwd, baseRefs) {
+  const index = new Map();
+  baseRefs.forEach((base, idx) => {
     const r = git(["log", "--format=%T", base], { cwd });
-    if (!r.ok) continue;
+    if (!r.ok) return;
     for (const line of r.out.split("\n")) {
       const h = line.trim();
-      if (h) set.add(h);
+      if (!h) continue;
+      const owners = index.get(h);
+      if (!owners) index.set(h, [idx]);
+      else if (!owners.includes(idx)) owners.push(idx);
     }
+  });
+  return index;
+}
+
+/**
+ * True when `ref` looks squash/rebase-merged into one of the base refs: its
+ * tip tree appears in a base's history, AND that tree differs from the tree
+ * at the branch's own starting point (the merge-base). The second condition
+ * excludes net-empty branches — e.g. work that was fully reverted, or a
+ * no-op commit — whose tree coincidentally matches an old base tree but
+ * whose work was never integrated.
+ */
+export function isContentMerged(cwd, ref, baseRefs, treeIndex) {
+  const tree = treeOf(cwd, ref);
+  if (!tree) return false;
+  const owners = treeIndex.get(tree);
+  if (!owners) return false;
+  for (const idx of owners) {
+    const mb = git(["merge-base", ref, baseRefs[idx]], { cwd });
+    if (!mb.ok) continue;
+    const mbTree = treeOf(cwd, mb.out);
+    if (mbTree && mbTree !== tree) return true;
   }
-  return set;
+  return false;
 }
 
 /** Local branch probe: upstream ref (or null) and whether the remote branch still exists. */

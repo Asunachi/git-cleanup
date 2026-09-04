@@ -50,7 +50,9 @@ Nothing is ever deleted automatically. Decisions are conservative:
   already exists somewhere in a base branch's history, the branch is treated
   as merged even though its commit SHAs were rewritten. Because ancestry is
   absent those refs are removed with `-D` — safe here, since every file of
-  the branch already lives in the base branch.
+  the branch already lives in the base branch. Net-empty branches (no-op
+  commits, fully reverted work) are excluded: the matching tree must differ
+  from the tree at the branch's own starting point.
 * Protected by default: `main master develop dev release release/** staging
   qa trunk`, every base branch, the currently checked-out branch, and anything
   matching your `protected` list. A remote branch is protected by the same
@@ -95,9 +97,12 @@ git-cleanup scan --check --json && echo "workspace is clean"
 
 Prints the candidates, then asks before deleting, grouped by risk:
 
-1. merged local branches (default answer **yes**),
-2. unmerged branches matched by force rules (default **no**),
-3. merged/abandoned remote branches when `--remote` is passed (default **yes**,
+1. ancestor-merged local branches (default answer **yes**),
+2. squash/rebase-merged local branches — content provably exists in a base
+   branch (default **yes**; net-empty or coincidentally-matching branches are
+   never flagged),
+3. unmerged branches matched by force rules (default **no**),
+4. merged/abandoned remote branches when `--remote` is passed (default **yes**,
    only offered with `--remote`).
 
 Pass `--yes` (or set `GIT_CLEANUP_YES=1`) to run non-interactively. Remote
