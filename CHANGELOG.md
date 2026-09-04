@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-04
+
 ### Added
 
 - Backup safety net: before removing branches whose unique commits would be
@@ -22,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CI checkouts are detected and unshallowed (with an explicit refspec that
   covers every remote branch) before scanning, so merge detection sees full
   history; `unshallow: false` opts out when the checkout already uses
-  `fetch-depth: 0`.
+  `fetch-depth: 0`. Pin the action to this tag:
+  `Asunachi/git-cleanup/.github/actions/scan-report@v0.2.2`.
 - `rule` is now included in `scan --json` output so rule-based reasons are
   self-describing for downstream consumers.
 
@@ -35,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   branch (old enough, it was even flagged prunable). Filtering now happens
   on the full ref name; integration fixtures clone and set `origin/HEAD`
   like real repos to keep this covered.
+- The scan-report action now wires the caller's `GITHUB_TOKEN` through to
+  `gh` (the runner does not export it automatically), so the report issue
+  is actually created/updated.
 
 ## [0.2.1] - 2026-09-04
 

@@ -271,15 +271,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Asunachi/git-cleanup/.github/actions/scan-report@main
+      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.2.2
         with:
           path: .
           report: issue
           issue-title: "git-cleanup: branch report"
 ```
 
-Pin to a release tag (e.g. `@v0.2.2` once cut) rather than `@main` if you
-want the action frozen to a specific version.
+`@v0.2.2` (the current release tag) is pinned above; use `@main` only if
+you want the action to track unreleased changes.
 
 **Shallow checkouts are handled automatically.** CI clones default to
 `fetch-depth: 1`, which hides history from merge detection (both ancestor
