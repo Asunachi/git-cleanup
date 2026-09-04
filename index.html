@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>git-cleanup — branch &amp; stale PR automator</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel2: #1c2330;
+    --border: #2d333b;
+    --text: #e6edf3;
+    --dim: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --amber: #d29922;
+    --cyan: #39c5cf;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 22px 90px; }
+  header h1 { font: 700 30px/1.2 var(--mono); margin: 0 0 4px; }
+  header p.sub { color: var(--dim); margin: 0 0 18px; max-width: 66ch; }
+  .badges span {
+    display: inline-block; margin: 0 8px 8px 0; padding: 2px 10px;
+    border: 1px solid var(--border); border-radius: 999px;
+    font: 12px var(--mono); color: var(--dim);
+  }
+  .badges span b { color: var(--text); font-weight: 600; }
+  h2 {
+    font: 600 18px var(--mono); margin: 34px 0 10px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  h2 .num { color: var(--cyan); margin-right: 8px; }
+  code, pre { font-family: var(--mono); }
+  pre {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+    color: #c9d1d9; font-size: 13px; line-height: 1.5;
+  }
+  .cmd { color: var(--green); }
+  .ghost { color: var(--dim); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px; margin: 14px 0 22px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+  label.f { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 8px 0 4px; }
+  input[type=text], select {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font: 13px var(--mono);
+  }
+  input[type=range] { width: 100%; accent-color: var(--cyan); }
+  .row { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .col { flex: 1 1 230px; min-width: 230px; }
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  button.chip {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; font: 12px var(--mono); cursor: pointer;
+  }
+  button.chip:hover { border-color: var(--cyan); }
+  .verdict {
+    margin-top: 14px; padding: 14px 16px; border-radius: 8px;
+    border: 1px solid var(--border); font: 14px var(--mono);
+    background: var(--panel2);
+  }
+  .verdict .tag { font-weight: 700; }
+  .v-delete { color: var(--red); }
+  .v-warn { color: var(--amber); }
+  .v-keep { color: var(--green); }
+  .tag-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
+  .dot-delete { background: var(--red); }
+  .dot-warn { background: var(--amber); }
+  .dot-keep { background: var(--green); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--dim); font-weight: 600; text-transform: uppercase; font-size: 11.5px; letter-spacing: .06em; }
+  .ok { color: var(--green); }
+  .no { color: var(--red); }
+  .warn { color: var(--amber); }
+  .dim { color: var(--dim); }
+  footer { margin-top: 40px; color: var(--dim); font-size: 13px; }
+  a { color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1><span style="color:var(--green)">git-cleanup</span> <span class="dim">v0.1.0</span></h1>
+    <p class="sub">Zero-dependency CLI that scans local &amp; remote Git branches, cross-references branch
+      activity with PR merge status on GitHub, and safely prunes merged / orphaned / stale branches.
+      This page is a live look at the project: commands, decision model, and two interactive demos
+      that mirror the CLI's real logic.</p>
+    <div class="badges">
+      <span><b>Node ≥ 18</b> · no npm deps</span>
+      <span>git only — never touches <b>.git</b> internals</span>
+      <span>PR data via <b>gh</b> CLI or <b>GITHUB_TOKEN</b></span>
+      <span><b>23/23</b> tests passing (node --test)</span>
+    </div>
+  </header>
+
+  <h2><span class="num">01</span>Commands</h2>
+  <div class="grid">
+    <pre><span class="cmd">$ git-cleanup scan</span>
+<span class="ghost"># PRUNE / stale table for every branch,
+# with age, merge state, PR status, reason
+# --json  --check (exit 2 if dirty)  --verbose</span></pre>
+    <pre><span class="cmd">$ git-cleanup prune</span>
+<span class="ghost"># deletes nothing without confirmation
+# merged branches  -> git branch -d
+# force rules      -> git branch -D
+# --remote         -> git push --delete</span></pre>
+    <pre><span class="cmd">$ git-cleanup prs</span>
+<span class="ghost"># stale open PRs (>30d no activity)
+# --close closes them, with a comment
+# opt-in twice: config + flag</span></pre>
+  </div>
+
+  <h2><span class="num">02</span>Example scan output</h2>
+  <pre><span class="ghost">📦 /work/repo</span>
+<span class="ghost">base: origin/main   HEAD: main</span>
+  STATUS  BRANCH                       TYPE    AGE   MERGED  PR              REASON
+  <span class="no">PRUNE</span>   feature/merged-old           local   60d   yes     merged #12      merged into base
+  <span class="no">PRUNE</span>   origin/feature/merged-old2   remote  50d   yes     -               merged into base
+  <span class="warn">stale</span>   wip/abandoned                local   100d  -       closed #4        unmerged and stale
+  <span class="ghost">2 branches flagged stale but kept (run git-cleanup scan to review)</span>
+
+  <span class="no">3 prunable</span> <span class="dim">·</span> <span class="warn">1 stale</span> <span class="dim">·</span> <span class="ok">6 kept</span></pre>
+
+  <h2><span class="num">03</span>Safety model</h2>
+  <table>
+    <tr><th>Verdict</th><th>Meaning</th><th>Needed to delete</th></tr>
+    <tr><td class="no"><b>PRUNE</b></td>
+        <td>merged into a base branch &amp; past the age threshold, or matched an explicit rule</td>
+        <td><code>prune</code> + confirmation</td></tr>
+    <tr><td class="warn"><b>stale</b></td>
+        <td>unmerged &amp; untouched for a long time, or an abandoned PR</td>
+        <td>never automatic — review in <code>scan</code></td></tr>
+    <tr><td class="ok"><b>kept</b></td>
+        <td>protected, checked out, a base branch, an open PR, or too young</td>
+        <td>—</td></tr>
+  </table>
+  <p class="dim" style="margin-top:10px">Protected by default: <code>main master develop dev release release/** staging qa trunk</code>,
+  base branches and HEAD. Unmerged work is never deleted unless it matches a <code>mode:"any"</code>
+  force rule you wrote yourself. Merged = the branch tip is an ancestor of a base branch
+  (<code>origin/main</code> etc.). Local deletes use <code>-d</code> (safe); only force rules use <code>-D</code>.</p>
+
+  <h2><span class="num">04</span>Demo · classify a branch</h2>
+  <p class="dim" style="margin:-2px 0 6px">Drives the same decision engine as the CLI (mirrors <code>src/classify.mjs</code>).</p>
+  <div class="panel">
+    <div class="row">
+      <div class="col">
+        <label class="f" for="d-name">Branch name</label>
+        <input type="text" id="d-name" value="feature/merged-old" spellcheck="false" />
+        <label class="f" for="d-type">Where it lives</label>
+        <select id="d-type">
+          <option value="local">local</option>
+          <option value="remote">remote (origin/*)</option>
+        </select>
+        <label class="f" for="d-rule">Rule set (config)</label>
+        <select id="d-rule">
+          <option value="none">none (defaults)</option>
+          <option value="ci">{"match": "feature/ci-*", "mode": "merged", "minAgeDays": 7}</option>
+          <option value="slow">{"match": "feature/slow-*", "mode": "merged", "minAgeDays": 90}</option>
+          <option value="tmp">{"match": "tmp/*", "mode": "any", "minAgeDays": 1}</option>
+        </select>
+      </div>
+      <div class="col">
+        <label class="f">Age <span id="d-age-label" class="ghost"></span></label>
+        <input type="range" id="d-age" min="0" max="200" value="60" />
+        <label class="f">PR state</label>
+        <select id="d-pr">
+          <option value="none">no PR</option>
+          <option value="open">open (with activity)</option>
+          <option value="open-stale">open, no activity for a while</option>
+          <option value="closed">closed, never merged</option>
+          <option value="merged">merged</option>
+        </select>
+        <label class="f"><input type="checkbox" id="d-head" style="accent-color:var(--cyan); vertical-align:-2px" /> checked out (HEAD)</label>
+      </div>
+    </div>
+    <div class="verdict" id="d-out"></div>
+  </div>
+
+  <h2><span class="num">05</span>Demo · glob matcher</h2>
+  <p class="dim" style="margin:-2px 0 6px">Mirrors <code>globToRegExp</code> from <code>src/util.mjs</code>: <code>**</code> spans
+  slashes, <code>*</code> does not, <code>?</code> matches one char.</p>
+  <div class="panel">
+    <div class="row">
+      <div class="col">
+        <label class="f" for="g-pattern">Pattern</label>
+        <input type="text" id="g-pattern" value="release/**" spellcheck="false" />
+      </div>
+      <div class="col">
+        <label class="f" for="g-name">Branch name to test</label>
+        <input type="text" id="g-name" value="release/v1/hotfix" spellcheck="false" />
+      </div>
+    </div>
+    <div class="chip-row" id="g-chips"></div>
+    <div class="verdict" id="g-out"></div>
+  </div>
+
+  <h2><span class="num">06</span>Configuration</h2>
+  <pre><span class="ghost">// .gitcleanup.json — found walking up from cwd, merged over
+// ~/.config/git-cleanup/config.json, then built-in defaults.</span>
+{
+  <span class="warn">"protected"</span>: [<span class="ok">"special/release"</span>, <span class="ok">"vendor/**"</span>],
+  <span class="warn">"deleteMergedAfterDays"</span>: 21,
+  <span class="warn">"warnUnmergedAfterDays"</span>: 45,
+  <span class="warn">"rules"</span>: [
+    { <span class="warn">"match"</span>: <span class="ok">"feature/ci-*"</span>, <span class="warn">"mode"</span>: <span class="ok">"merged"</span>, <span class="warn">"minAgeDays"</span>: 7 },
+    { <span class="warn">"match"</span>: <span class="ok">"tmp/**"</span>, <span class="warn">"mode"</span>: <span class="ok">"any"</span>, <span class="warn">"minAgeDays"</span>: 1 }
+  ],
+  <span class="warn">"pr"</span>: {
+    <span class="warn">"track"</span>: true, <span class="warn">"staleAfterDays"</span>: 30,
+    <span class="warn">"closeStaleAfterDays"</span>: 60
+  },
+  <span class="warn">"remote"</span>: { <span class="warn">"pruneMerged"</span>: true, <span class="warn">"deleteAbandonedAfterDays"</span>: 0 },
+  <span class="warn">"repos"</span>: [<span class="ok">"../other-project"</span>]
+}</pre>
+
+  <h2><span class="num">07</span>Run it yourself</h2>
+  <pre><span class="cmd">$ npm link</span>                     <span class="ghost"># adds `git-cleanup` to PATH</span>
+<span class="cmd">$ cd ~/your/repo && git-cleanup scan</span>
+<span class="cmd">$ git-cleanup prune</span>            <span class="ghost"># asks before deleting</span>
+<span class="cmd">$ npm test</span>                     <span class="ghost"># 23 unit + integration tests</span></pre>
+
+  <footer>
+    git-cleanup · source in <code>src/</code>, tests in <code>test/</code>, docs in <code>README.md</code>.
+    Interactive demos on this page re-implement the CLI's logic in the browser for illustration —
+    the CLI itself stays the source of truth.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- faithful port of src/util.mjs globToRegExp ---------------------------
+  var ESCAPE_RE = /[.+^${}()|[\]\\]/g;
+  function globToRegExp(glob) {
+    var source = "";
+    for (var i = 0; i < glob.length; ) {
+      var ch = glob[i];
+      if (ch === "*") {
+        if (glob[i + 1] === "*") {
+          if (glob[i + 2] === "/") { source += "(?:.*/)?"; i += 3; }
+          else { source += ".*"; i += 2; }
+        } else { source += "[^/]*"; i += 1; }
+      } else if (ch === "?") {
+        source += "[^/]"; i += 1;
+      } else {
+        source += ch.replace(ESCAPE_RE, "\\$&"); i += 1;
+      }
+    }
+    return new RegExp("^" + source + "$");
+  }
+  function matchesAny(patterns, name) {
+    return patterns.some(function (p) { return globToRegExp(p).test(name); });
+  }
+
+  // ---- faithful port of src/classify.mjs ------------------------------------
+  var DEFAULT_PROTECTED = ["main", "master", "develop", "dev", "release",
+    "release/**", "staging", "qa", "trunk", "HEAD"];
+  var RULES = {
+    none: null,
+    ci: { match: "feature/ci-*", mode: "merged", minAgeDays: 7 },
+    slow: { match: "feature/slow-*", mode: "merged", minAgeDays: 90 },
+    tmp: { match: "tmp/*", mode: "any", minAgeDays: 1 }
+  };
+  var REASONS = {
+    head: "checked out — never pruned",
+    protected: "protected branch",
+    ruleForce: 'force rule "' + (RULES.tmp ? RULES.tmp.match : "") + '" matched (unmerged allowed)',
+    merged: "merged into base, past deleteMergedAfterDays (21d)",
+    mergedRule: "merged and past its rule's minAgeDays",
+    mergedRuleYoung: "merged but below its rule's minAgeDays — kept",
+    tooYoung: "merged recently — below the age threshold",
+    openPr: "PR open (with recent activity)",
+    stalePr: "PR open but stale",
+    staleUnmerged: "unmerged and stale — review before deciding",
+    orphan: "local only, upstream gone",
+    active: "active — nothing to do",
+    unmergedRule: "matched a merged-only rule but is not merged — kept",
+    remoteNote: ""
+  };
+
+  function shortName(name, type) {
+    if (type === "remote") {
+      var idx = name.indexOf("/");
+      return idx >= 0 ? name.slice(idx + 1) : name;
+    }
+    return name;
+  }
+
+  function classifyBranch(input) {
+    var name = input.name.trim();
+    var short = shortName(name, input.type);
+    var out = { verdict: "keep", reason: "", tag: "" };
+
+    if (input.head) {
+      out.verdict = "keep"; out.reason = "head";
+    } else if (matchesAny(DEFAULT_PROTECTED, short)) {
+      out.verdict = "keep"; out.reason = "protected";
+    } else {
+      var rule = input.rule ? RULES[input.rule] : null;
+      var ruleHits = rule && matchesAny([rule.match], short);
+      if (ruleHits && rule.mode === "any" && input.age >= (rule.minAgeDays || 0)) {
+        out.verdict = "delete"; out.reason = "ruleForce";
+        out.ruleName = rule.match;
+      } else if (input.merged) {
+        // A matching merged-mode rule owns the threshold for its branches:
+        // it can raise OR lower the generic 21-day default.
+        if (ruleHits && rule.mode === "merged") {
+          if (input.age >= (rule.minAgeDays != null ? rule.minAgeDays : 0)) {
+            out.verdict = "delete"; out.reason = "mergedRule";
+          } else {
+            out.verdict = "keep"; out.reason = "mergedRuleYoung";
+          }
+        } else if (input.age >= 21) {
+          out.verdict = "delete"; out.reason = "merged";
+        } else {
+          out.verdict = "keep"; out.reason = "tooYoung";
+        }
+      } else if (input.prState === "open" || input.prState === "open-stale") {
+        if (input.prState === "open") { out.verdict = "keep"; out.reason = "openPr"; }
+        else { out.verdict = "warn"; out.reason = "stalePr"; }
+      } else if (ruleHits && rule.mode === "merged") {
+        out.verdict = "keep"; out.reason = "unmergedRule";
+      } else if (input.age >= 45) {
+        out.verdict = "warn"; out.reason = "staleUnmerged";
+      } else {
+        out.verdict = "keep"; out.reason = "active";
+      }
+    }
+    if (input.type === "remote" && out.verdict === "delete") {
+      out.remoteGate = true;
+    }
+    return out;
+  }
+
+  // ---- verdict panel ---------------------------------------------------------
+  var outEl = document.getElementById("d-out");
+  var ageInput = document.getElementById("d-age");
+  var ageLabel = document.getElementById("d-age-label");
+
+  function render() {
+    var input = {
+      name: document.getElementById("d-name").value,
+      type: document.getElementById("d-type").value,
+      age: parseInt(ageInput.value, 10),
+      merged: document.getElementById("d-merged").checked,
+      prState: document.getElementById("d-pr").value,
+      head: document.getElementById("d-head").checked,
+      rule: document.getElementById("d-rule").value
+    };
+    if (input.type === "remote") input.name = input.name.replace(/^origin\//, "");
+    ageLabel.textContent = input.age + " days";
+
+    var r = classifyBranch(input);
+    var cls, tag, note = "";
+    if (r.verdict === "delete") { cls = "v-delete"; tag = "PRUNE"; }
+    else if (r.verdict === "warn") { cls = "v-warn"; tag = "stale"; }
+    else { cls = "v-keep"; tag = "keep"; }
+
+    var reasonText = REASONS[r.reason];
+    if (r.reason === "ruleForce") {
+      reasonText = "force rule matched (" + (r.ruleName || "?") + ", mode any) — delete even unmerged";
+    }
+    var html = '<span class="tag-dot dot-' + (r.verdict === "delete" ? "delete" : r.verdict === "warn" ? "warn" : "keep") + '"></span>'
+      + '<span class="tag ' + cls + '">' + tag + '</span>'
+      + '<span class="ghost">  →  ' + escapeHtml(reasonText) + "</span>";
+    if (r.remoteGate) {
+      html += '<div class="ghost" style="margin-top:6px">remote branch — deletion additionally requires <b>git-cleanup prune --remote</b> (merged or abandoned only).</div>';
+    }
+    outEl.innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  // wire the classifier panel: live-input for text/slider, change for selects
+  document.getElementById("d-name").addEventListener("input", render);
+  ["d-type", "d-pr", "d-rule", "d-head", "d-merged"].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("change", render);
+  });
+  ageInput.addEventListener("input", render);
+
+  // merged checkbox was omitted from markup; inject next to HEAD checkbox
+  (function () {
+    var head = document.getElementById("d-head");
+    var merged = document.createElement("label");
+    merged.setAttribute("class", "f");
+    merged.innerHTML = '<input type="checkbox" id="d-merged" style="accent-color:var(--cyan); vertical-align:-2px" checked /> merged into base branch';
+    head.closest("label").parentNode.insertBefore(merged, head.closest("label"));
+    document.getElementById("d-merged").addEventListener("change", render);
+  })();
+
+  // ---- glob demo -------------------------------------------------------------
+  var gOut = document.getElementById("g-out");
+  var gPattern = document.getElementById("g-pattern");
+  var gName = document.getElementById("g-name");
+  var samples = [
+    { p: "release/**", n: "release/v1" },
+    { p: "release/**", n: "release/v1/hotfix" },
+    { p: "**/feature", n: "feature" },
+    { p: "**/feature", n: "a/b/feature" },
+    { p: "feature/*", n: "feature/x/y" },
+    { p: "tmp-*", n: "tmp-old" },
+    { p: "main", n: "main" }
+  ];
+  function renderGlob() {
+    var pattern = gPattern.value.trim();
+    var name = gName.value.trim();
+    var ok = false, err = null;
+    if (!pattern || !name) { err = "fill in both fields"; }
+    else {
+      try { ok = matchesAny([pattern], name); }
+      catch (e) { err = "invalid pattern: " + e.message; }
+    }
+    if (err) {
+      gOut.innerHTML = '<span class="tag v-warn">invalid</span> <span class="ghost">  →  ' + escapeHtml(err) + "</span>";
+    } else {
+      var cls = ok ? "v-keep" : "v-delete";
+      var tag = ok ? "MATCH" : "no match";
+      gOut.innerHTML = '<span class="tag-dot dot-' + (ok ? "keep" : "delete") + '"></span>'
+        + '<span class="tag ' + cls + '">' + tag + "</span>"
+        + '<span class="ghost">  →  /' + escapeHtml(globToRegExp(pattern).source) + "/ tests "
+        + escapeHtml(name) + "</span>";
+    }
+  }
+  gPattern.addEventListener("input", renderGlob);
+  gName.addEventListener("input", renderGlob);
+  var chipHost = document.getElementById("g-chips");
+  samples.forEach(function (s) {
+    var b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = s.p + "  ~  " + s.n;
+    b.addEventListener("click", function () {
+      gPattern.value = s.p;
+      gName.value = s.n;
+      renderGlob();
+    });
+    chipHost.appendChild(b);
+  });
+
+  render();
+  renderGlob();
+})();
+</script>
+</body>
+</html>

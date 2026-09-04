@@ -1,0 +1,30 @@
+{
+  "name": "git-cleanup",
+  "version": "0.1.0",
+  "description": "Scan local and remote Git branches, cross-reference PR merge status, and safely prune stale/merged branches.",
+  "license": "MIT",
+  "author": { "name": "Maliq" },
+  "type": "module",
+  "bin": {
+    "git-cleanup": "./bin/git-cleanup.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "keywords": [
+    "git",
+    "branch",
+    "cleanup",
+    "prune",
+    "pull-request",
+    "stale",
+    "cli"
+  ],
+  "license": "MIT"
+}

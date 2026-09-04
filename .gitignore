@@ -1,0 +1,4 @@
+node_modules/
+.freebuff/
+test/.scratch/
+*.log
