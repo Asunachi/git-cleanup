@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `prs --json` always emits exactly one parseable JSON document. It used to
+  print nothing when no PR backend reported stale PRs and one object per
+  repo when several did — empty or concatenated output that no consumer
+  could parse. Output is now an array in input order (per-repo stale lists,
+  `error` entries where a repo or its PR backend failed), matching the
+  single-document promise of `scan --json`.
+- `scan --repo <file>` (a path that exists but is not a directory) used to
+  crash with a bare `spawnSync git ENOTDIR`; it now reports
+  `"…" is not a directory` and exits 1, with the error inside the JSON doc
+  in `--json` mode.
 - The playground's timeline bars were mirrored: a branch last touched `age`
   days ago was drawn starting at `age/180` of the track, so old branches
   looked fresh and vice versa. Bars now start at `(180 − age)/180` (oldest

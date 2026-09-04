@@ -167,6 +167,11 @@ git-cleanup prs --close        # asks first
 git-cleanup prs --close --yes  # for a nightly cron
 ```
 
+`prs --json` always prints **one parseable JSON document** — an array in
+input order with one entry per readable repo (`{ path, repo, staleAfterDays,
+prs }`), and an `error` entry where a repo or its PR backend failed, so
+consumers never have to handle empty or concatenated output.
+
 Only open PRs older than `closeStaleAfterDays` (falls back to
 `staleAfterDays`) are closed. Closing PRs never deletes branches — run
 `git-cleanup prune` separately for that.

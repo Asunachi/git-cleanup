@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -400,6 +407,67 @@ test("CLI: prune --yes --remote cleans everything", () => {
     const names = listBranches(f.work, "heads").map((b) => b.name);
     assert.ok(!names.includes("feature/merged-old"));
     assert.ok(names.includes("release/v1"));
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
+test("CLI: --repo pointing at a file errors cleanly (no ENOTDIR crash)", () => {
+  const f = fixture();
+  try {
+    const home = mkdtempSync(join(tmpdir(), "gc-home-"));
+    const env = { ...process.env, HOME: home, GIT_CLEANUP_NO_COLOR: "1" };
+    const runCli = (args) =>
+      spawnSync(process.execPath, [BIN, ...args], {
+        cwd: ROOT,
+        encoding: "utf8",
+        env,
+      });
+    const file = join(f.work, "not-a-repo.txt");
+    writeFileSync(file, "x");
+
+    const r = runCli(["scan", "--repo", file]);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /is not a directory/);
+
+    // JSON mode must still emit one valid document with the error inside.
+    const j = runCli(["scan", "--json", "--repo", file]);
+    assert.equal(j.status, 1, j.stdout + j.stderr);
+    const doc = JSON.parse(j.stdout);
+    assert.equal(doc.repos[0].notGit, true);
+    assert.match(doc.repos[0].error, /is not a directory/);
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
+test("CLI: prs --json always emits one parseable JSON document", () => {
+  const f = fixture();
+  try {
+    const home = mkdtempSync(join(tmpdir(), "gc-home-"));
+    const env = { ...process.env, HOME: home, GIT_CLEANUP_NO_COLOR: "1" };
+    const runCli = (args) =>
+      spawnSync(process.execPath, [BIN, ...args], {
+        cwd: ROOT,
+        encoding: "utf8",
+        env,
+      });
+    // The fixture's origin is a local path, not a forge host: no PR backend,
+    // so the contract is an empty array — still valid, parseable JSON (an
+    // empty stdout would not be).
+    const r = runCli(["prs", "--json", "--repo", f.work]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), []);
+
+    // Even when every repo is unreadable the output is still one parseable
+    // document carrying the errors (exit 1), not empty stdout.
+    const bad = runCli(["prs", "--json", "--repo", join(f.work, "missing")]);
+    assert.equal(bad.status, 1);
+    const doc = JSON.parse(bad.stdout);
+    assert.equal(doc.length, 1);
+    assert.match(doc[0].error, /does not exist/);
   } finally {
     f.cleanup();
     repos.pop();

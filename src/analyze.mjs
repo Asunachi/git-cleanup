@@ -1,6 +1,6 @@
 // Gather everything about one repository's branches and classify each one.
 
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import {
   defaultBaseRefs,
   isContentMerged,
@@ -35,6 +35,15 @@ export async function analyzeRepo(repoPath, cfg) {
       path: repoPath,
       notGit: true,
       error: `"${repoPath}" does not exist`,
+    };
+  }
+  // A plain file (not a directory) makes every git subprocess fail with a
+  // confusing ENOTDIR; report it as what it is instead.
+  if (!statSync(repoPath).isDirectory()) {
+    return {
+      path: repoPath,
+      notGit: true,
+      error: `"${repoPath}" is not a directory`,
     };
   }
   const meta = repoMeta(repoPath);

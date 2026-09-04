@@ -191,67 +191,85 @@ async function cmdPrs(results, cfg, opts) {
   const reportThreshold = cfg.pr.staleAfterDays;
   const closeThreshold =
     cfg.pr.closeStaleAfterDays > 0 ? cfg.pr.closeStaleAfterDays : reportThreshold;
-  let anyNotGit = false;
-  for (const r of results) {
-    if (r.notGit) {
-      anyNotGit = true;
-      console.error(c.red(`error: ${r.error}`));
-    }
+  const notGit = results.filter((r) => r.notGit);
+  for (const r of notGit) {
+    console.error(c.red(`error: ${r.error}`));
   }
-  if (anyNotGit && results.every((r) => r.notGit)) return 1;
   // A repo that could not be read is an error even when other repos listed
   // PRs fine, so surface it through the exit code.
-  const done = (code) => (anyNotGit ? 1 : code);
+  const done = (code) => (notGit.length > 0 ? 1 : code);
   const usable = results.filter((r) => !r.notGit && r.pr.source !== "none");
   const unusable = results.filter((r) => !r.notGit && r.pr.source === "none");
 
-  let found = false;
-  for (const r of usable) {
-    const stale = stalePRs(r.pr.prs, reportThreshold);
-    if (stale.length === 0) {
-      if (!opts.json) console.log(c.green(`  ${r.path}: no stale PRs 🎉`));
-      continue;
-    }
-    found = true;
-    if (opts.json) {
-      console.log(
-        JSON.stringify(
-          {
+  const prShape = (p) => ({
+    number: p.number,
+    title: p.title,
+    state: p.state,
+    isDraft: p.isDraft,
+    ageDays: p.ageDays,
+    url: p.url,
+  });
+
+  // Machine-readable mode always prints exactly ONE JSON document (never
+  // empty, never concatenated objects, even when every repo failed) so
+  // consumers always get a parseable array, in input order:
+  //   { path, repo, staleAfterDays, prs: [...] }     repo could be scanned
+  //   { path, repo, error }                           PR backend unavailable
+  //   { path, error }                                 repo could not be read
+  if (opts.json) {
+    const doc = [];
+    for (const r of results) {
+      if (r.notGit) {
+        doc.push({ path: r.path, error: r.error });
+      } else if (r.pr.source === "none") {
+        if (r.pr?.repo && r.pr?.error) {
+          doc.push({
             path: r.path,
-            repo: r.pr.repo,
-            staleAfterDays: reportThreshold,
-            prs: stale.map((p) => ({
-              number: p.number,
-              title: p.title,
-              state: p.state,
-              isDraft: p.isDraft,
-              ageDays: p.ageDays,
-              url: p.url,
-            })),
-          },
-          null,
-          2
-        )
-      );
-      continue;
+            repo: { owner: r.pr.repo.owner, repo: r.pr.repo.repo },
+            error: r.pr.error,
+          });
+        }
+      } else {
+        doc.push({
+          path: r.path,
+          repo: r.pr.repo
+            ? { owner: r.pr.repo.owner, repo: r.pr.repo.repo }
+            : null,
+          staleAfterDays: reportThreshold,
+          prs: stalePRs(r.pr.prs, reportThreshold).map(prShape),
+        });
+      }
     }
-    console.log(c.bold(`\n📦 ${r.path}  (${r.pr.repo.owner}/${r.pr.repo.repo})`));
-    for (const p of stale) {
-      console.log(
-        `  ${c.yellow("•")} #${p.number} ${c.dim(`${p.ageDays}d`)}  ${p.title}${p.isDraft ? c.dim(" [draft]") : ""}`
-      );
+    console.log(JSON.stringify(doc, null, 2));
+    if (!opts.close) return done(0);
+  } else {
+    if (notGit.length === results.length) return 1;
+    let found = false;
+    for (const r of usable) {
+      const stale = stalePRs(r.pr.prs, reportThreshold);
+      if (stale.length === 0) {
+        console.log(c.green(`  ${r.path}: no stale PRs 🎉`));
+        continue;
+      }
+      found = true;
+      console.log(c.bold(`\n📦 ${r.path}  (${r.pr.repo.owner}/${r.pr.repo.repo})`));
+      for (const p of stale) {
+        console.log(
+          `  ${c.yellow("•")} #${p.number} ${c.dim(`${p.ageDays}d`)}  ${p.title}${p.isDraft ? c.dim(" [draft]") : ""}`
+        );
+      }
     }
-  }
-  for (const r of unusable) {
-    if (r.pr?.repo && r.pr?.error && !opts.json) {
-      console.error(c.yellow(`  ${r.path}: ${r.pr.error}`));
+    for (const r of unusable) {
+      if (r.pr?.repo && r.pr?.error) {
+        console.error(c.yellow(`  ${r.path}: ${r.pr.error}`));
+      }
     }
+    if (!found) {
+      console.log("\n  no stale open PRs found");
+      return done(0);
+    }
+    if (!opts.close) return done(0);
   }
-  if (!found && !opts.json) {
-    console.log("\n  no stale open PRs found");
-    return done(0);
-  }
-  if (!opts.close || !found) return done(0);
 
   const ok = await confirmed(
     `Close ${plural(
