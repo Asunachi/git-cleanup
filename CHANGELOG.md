@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keep surfacing as real errors. The summary reports these as
   `pruned N stale remote refs`.
 
+### Added
+
+- Cross-platform stress tests for the `-d` fallback: the worktree-refusal
+  case now also runs with a worktree path containing spaces (the quoting
+  hazard that behaves differently on Windows vs POSIX), asserting the
+  refusal names the exact path with separators normalized, and the refusal
+  matcher accepts both git phrasings (`used by worktree at` / `checked out
+  at`) so it holds across git versions on the CI OS matrix.
+
 ## [0.2.6] - 2026-09-05
 
 ### Fixed

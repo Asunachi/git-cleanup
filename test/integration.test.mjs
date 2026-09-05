@@ -542,12 +542,45 @@ test("-d fallback does not mask real refusals (branch checked out in a worktree)
 
     const summary = await pruneRepo(repo, cfg, { yes: true });
     // Not silently deleted: the failure surfaces as an error and the branch
-    // (still checked out in the worktree) survives.
+    // (still checked out in the worktree) survives. Accept both git phrasings
+    // — "used by worktree at" and the older "checked out at" — since the
+    // exact wording drifts across git versions on different CI OS runners.
     assert.equal(summary.errors.length, 1, JSON.stringify(summary.errors));
-    assert.match(summary.errors[0].error, /used by worktree/);
+    assert.match(summary.errors[0].error, /used by worktree|checked out at/);
     assert.ok(!summary.deletedLocal.includes("feature/wt"));
     const names = listBranches(r.work, "heads").map((b) => b.name);
     assert.ok(names.includes("feature/wt"));
+  } finally {
+    rmSync(r.base, { recursive: true, force: true });
+  }
+});
+
+test("-d fallback keeps real refusals visible with a spaced worktree path (Windows/macOS)", async () => {
+  // The path is passed as a single argv element, never through a shell, so a
+  // directory containing spaces exercises the OS differences where quoting
+  // usually breaks: on Windows the error message carries a backslash path,
+  // on macOS/Linux a forward-slash one — normalize before asserting.
+  const r = remoteMergedStaleHeadRepo("feature/wt-spaced");
+  try {
+    const wtDir = join(r.base, "worktree with spaces");
+    sh(r.work, ["worktree", "add", "-q", wtDir, "feature/wt-spaced"]);
+
+    const cfg = defaults();
+    const repo = await analyzeRepo(r.work, cfg);
+    const wt = byName(repo, "feature/wt-spaced");
+    assert.equal(wt.merged, true);
+    assert.equal(wt.verdict, VERDICTS.DELETE);
+
+    const summary = await pruneRepo(repo, cfg, { yes: true });
+    assert.equal(summary.errors.length, 1, JSON.stringify(summary.errors));
+    assert.match(summary.errors[0].error, /used by worktree|checked out at/);
+    // The refusal must name the exact worktree path, backslashes normalized
+    // so the same assertion holds on Windows and POSIX.
+    const errPath = summary.errors[0].error.replace(/\\/g, "/");
+    assert.ok(errPath.includes(wtDir.replace(/\\/g, "/")), summary.errors[0].error);
+    assert.ok(!summary.deletedLocal.includes("feature/wt-spaced"));
+    const names = listBranches(r.work, "heads").map((b) => b.name);
+    assert.ok(names.includes("feature/wt-spaced"));
   } finally {
     rmSync(r.base, { recursive: true, force: true });
   }
