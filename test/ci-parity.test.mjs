@@ -148,3 +148,39 @@ test("ci.yml and .gitlab-ci.yml cannot drift apart", () => {
   const action = readFileSync(join(root, ".github", "actions", "scan-report", "action.yml"), "utf8");
   assert.match(action, /git-cleanup: branch report/);
 });
+
+test("pages.yml structure: deploys the playground on release tags and main", () => {
+  const PAGE = join(root, ".github", "workflows", "pages.yml");
+  assert.ok(existsSync(PAGE), ".github/workflows/pages.yml should exist");
+  const code = codeLines(PAGE);
+  assert.ok(code.length > 0);
+
+  for (const l of code) {
+    assert.ok(!l.text.includes("\t"), `line ${l.num}: tabs are not YAML-safe here`);
+    assert.equal(l.indent % 2, 0, `line ${l.num}: odd indentation`);
+  }
+
+  const top = code.filter((l) => l.indent === 0).map((l) => l.text.split(":")[0]);
+  assert.deepEqual(top, ["name", "on", "permissions", "concurrency", "jobs"]);
+
+  const text = readFileSync(PAGE, "utf8");
+  // Every release tag republishes the playground (the live site mirrors the
+  // latest release); main pushes and manual dispatch also deploy.
+  assert.match(text, /tags: \["v\*"\]/);
+  assert.match(text, /branches: \[main\]/);
+  assert.match(text, /workflow_dispatch/);
+  // The deploy actually republishes the engine: it regenerates index.html
+  // from src/engine.mjs and refuses to publish a stale copy.
+  assert.match(text, /npm run sync:playground/);
+  assert.match(text, /git diff --exit-code --quiet -- index\.html/);
+  // Official Pages actions, with the permissions they need.
+  assert.match(text, /actions\/upload-pages-artifact@v3/);
+  assert.match(text, /actions\/deploy-pages@v4/);
+  assert.match(text, /pages: write/);
+  assert.match(text, /id-token: write/);
+  // The site artifact it publishes is exactly what a visitor needs.
+  assert.match(text, /cp index\.html _site\//);
+  // The npm script it runs must exist.
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  assert.ok(pkg.scripts["sync:playground"], "package.json has the sync:playground script pages.yml runs");
+});

@@ -2,10 +2,25 @@ name: pages
 
 # Deploy the interactive playground (index.html + demo.svg) to GitHub Pages.
 # Live at https://asunachi.github.io/git-cleanup/
+#
+# Runs on:
+#   - every release tag (v*) — the live playground always mirrors the latest
+#     published release,
+#   - every push to main (unreleased engine changes preview there too), and
+#   - manual workflow_dispatch.
+#
+# Before deploying, the committed index.html is regenerated from
+# src/engine.mjs (npm run sync:playground) and verified byte-identical to
+# what is committed — the same freshness gate CI enforces on every PR — so a
+# stale page can never be published.
+#
+# One-time setup: GitHub repo Settings → Pages → Source: "GitHub Actions".
+# Pages then needs no branch; each run publishes the _site artifact.
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +40,21 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Rebuild + verify the committed playground bundle
+        shell: bash
+        run: |
+          npm run sync:playground
+          if ! git diff --exit-code --quiet -- index.html; then
+            echo "::error::index.html is out of sync with src/engine.mjs — run 'npm run sync:playground' and commit the result."
+            git diff --stat -- index.html
+            exit 1
+          fi
+          echo "playground bundle verified in sync with src/engine.mjs"
 
       - name: Stage the site
         shell: bash

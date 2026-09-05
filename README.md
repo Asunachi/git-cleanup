@@ -46,7 +46,9 @@ GitHub, GitLab, Bitbucket, and Gitea enrichment via `gh` CLI or a
 
 **Try the [interactive playground](https://asunachi.github.io/git-cleanup/)** —
 a simulated repo running the real decision engine in your browser: drag the
-age thresholds and watch every branch re-classify live.
+age thresholds and watch every branch re-classify live. The page deploys
+automatically from this repo on every `v*` release tag (and each `main`
+push), so it always mirrors the published release.
 
 ```
 $ git-cleanup scan

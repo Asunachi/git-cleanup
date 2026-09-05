@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The GitHub Pages deploy (`pages.yml`) now runs on every `v*` release tag
+  (in addition to `main` pushes and manual dispatch), so the playground at
+  asunachi.github.io/git-cleanup always mirrors the latest published
+  release. Before deploying it regenerates `index.html` from
+  `src/engine.mjs` and refuses to publish a page that drifted from the
+  committed bundle — the same freshness gate CI enforces per PR.
+
 ## [0.3.0] - 2026-09-06
 
 ### Security
