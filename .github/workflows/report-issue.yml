@@ -1,0 +1,42 @@
+name: branch report
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 03:00 UTC. fetch-depth: 0 below gives the scan full
+    # history for accurate merge detection — the action's unshallow step
+    # is not needed when the checkout is already full.
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Scan branches and render report
+        run: |
+          GIT_CLEANUP_NO_COLOR=1 node bin/git-cleanup.mjs scan --json --repo "$GITHUB_WORKSPACE" > scan.json
+          node .github/actions/scan-report/report.mjs scan.json report.md
+
+      - name: Rehearse the post (dry-run)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # Every run proves the post would work — token, forge detection, and
+        # the exact-title search all succeed — before the real write below.
+        # A failing rehearsal fails the job, so the report issue is never
+        # silently skipped.
+        run: node bin/git-cleanup.mjs report-issue report.md --dry-run
+
+      - name: Post report issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # One command, any forge: the remote (set by the checkout) picks the
+        # forge, the token above authenticates the search + write.
+        run: node bin/git-cleanup.mjs report-issue report.md

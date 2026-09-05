@@ -65,11 +65,12 @@
 
   <!-- ============ SCENE 3: unattended CI report ============ -->
   <g font-size="13">
-    <text x="24" y="462" fill="#d29922" opacity="0"><tspan>⏰ scheduled — .github/workflows/report.yml (weekly cron)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="15.4s" repeatCount="indefinite"/></text>
-    <text x="24" y="484" fill="#c9d1d9" opacity="0"><tspan>▸ shallow checkout (fetch-depth: 1) → fetching full history</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="16.2s" repeatCount="indefinite"/></text>
+    <text x="24" y="462" fill="#d29922" opacity="0"><tspan>⏰ scheduled — .github/workflows/report-issue.yml (weekly cron)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="15.4s" repeatCount="indefinite"/></text>
+    <text x="24" y="484" fill="#c9d1d9" opacity="0"><tspan>▸ full-depth checkout (fetch-depth: 0) → scan sees all history</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="16.2s" repeatCount="indefinite"/></text>
     <text x="24" y="506" fill="#c9d1d9" opacity="0"><tspan>▸ git-cleanup scan --json · 3 prunable · 1 stale · 8 kept</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="17.0s" repeatCount="indefinite"/></text>
-    <text x="24" y="528" fill="#c9d1d9" opacity="0"><tspan>▸ posting report → issue #42 (one issue kept current)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="17.8s" repeatCount="indefinite"/></text>
-    <text x="24" y="550" fill="#3fb950" opacity="0"><tspan>✓ </tspan><tspan fill="#39c5cf">https://github.com/owner/repo/issues/42</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="18.6s" repeatCount="indefinite"/></text>
+    <text x="24" y="528" fill="#c9d1d9" opacity="0"><tspan>▸ --dry-run rehearsal: would update issue #42</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="17.8s" repeatCount="indefinite"/></text>
+    <text x="24" y="550" fill="#c9d1d9" opacity="0"><tspan>▸ posting report → issue #42 (one issue kept current)</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="18.6s" repeatCount="indefinite"/></text>
+    <text x="24" y="572" fill="#3fb950" opacity="0"><tspan>✓ </tspan><tspan fill="#39c5cf">https://github.com/owner/repo/issues/42</tspan><animate attributeName="opacity" values="0;1;1" keyTimes="0;0.05;1" dur="26s" begin="19.4s" repeatCount="indefinite"/></text>
   </g>
 
   <!-- blinking cursor after the last line -->

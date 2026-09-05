@@ -6,12 +6,12 @@
 // to pure git merge detection.
 
 import { spawnSync } from "node:child_process";
-import { daysFromNowIso } from "../util.mjs";
+import { apiFetch, daysFromNowIso, fetchWithTimeout, ForgeError } from "../util.mjs";
 
 export class PRBackendError extends Error {}
 
 /** Parse owner/repo out of a GitHub remote URL, or null. */
-function parseGitHubRemote(url) {
+export function parseGitHubRemote(url) {
   if (!url) return null;
   const cleaned = url
     .replace(/^git@/, "ssh://git@")
@@ -63,12 +63,29 @@ function normalizeRestPr(p) {
   };
 }
 
+const REST_PER_PAGE = 100;
+// Never page forever on a giant repository: beyond this many pages the PR
+// list is truncated and the run reports `truncated: true` instead of
+// silently judging branches against an incomplete PR picture.
+const REST_MAX_PAGES = 20; // 2,000 PRs
+// gh pr list caps at this many items; we ask for one more to DETECT that
+// the cap was hit (a full page means more PRs exist).
+const GH_LIMIT = 500;
+
+/** rel="next" URL from a Link header, or null. */
+function linkNext(header) {
+  const m = /<([^>]+)>;\s*rel="?next"?/i.exec(header ?? "");
+  return m ? m[1] : null;
+}
+
 async function fetchRestPrs(owner, repo, token) {
   const out = [];
-  for (let page = 1; page <= 5; page++) {
-    const res = await fetch(
+  let truncated = false;
+  let page = 1;
+  for (;;) {
+    const res = await fetchWithTimeout(
       `https://api.github.com/repos/${owner}/${repo}/pulls` +
-        `?state=all&sort=updated&direction=desc&per_page=100&page=${page}`,
+        `?state=all&sort=updated&direction=desc&per_page=${REST_PER_PAGE}&page=${page}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -83,9 +100,16 @@ async function fetchRestPrs(owner, repo, token) {
     const items = await res.json();
     if (!Array.isArray(items) || items.length === 0) break;
     for (const p of items) out.push(normalizeRestPr(p));
-    if (items.length < 100) break;
+    // Follow pagination while the API says more pages exist; stop early (and
+    // say so) once the safety cap is reached.
+    if (!linkNext(res.headers?.get?.("link"))) break;
+    if (page >= REST_MAX_PAGES) {
+      truncated = true;
+      break;
+    }
+    page += 1;
   }
-  return out;
+  return { prs: out, truncated };
 }
 
 function fetchGhPrs(owner, repo) {
@@ -99,7 +123,7 @@ function fetchGhPrs(owner, repo) {
       "--state",
       "all",
       "--limit",
-      "500",
+      String(GH_LIMIT + 1),
       "--json",
       "number,state,title,isDraft,url,headRefName,updatedAt,mergedAt",
     ],
@@ -109,7 +133,9 @@ function fetchGhPrs(owner, repo) {
   // fall through to the REST fallback, not silently read as success.
   if (!r.error && r.status === 0) {
     const json = JSON.parse(r.stdout || "[]");
-    return json.map(normalizeGhPr);
+    // Asking for GH_LIMIT + 1 items: receiving all of them proves the repo
+    // has more than GH_LIMIT PRs, so the list is truncated.
+    return { prs: json.map(normalizeGhPr), truncated: json.length > GH_LIMIT };
   }
   if (r.error) {
     throw new PRBackendError(`gh unavailable: ${r.error.message}`);
@@ -142,8 +168,9 @@ async function loadPRs({ cwd, remotes, track }) {
 
   let raw = null;
   let source = null;
+  let truncated = false;
   try {
-    raw = fetchGhPrs(owner, repo);
+    ({ prs: raw, truncated } = fetchGhPrs(owner, repo));
     source = "gh";
   } catch (ghErr) {
     const token = process.env.GITHUB_TOKEN;
@@ -157,7 +184,7 @@ async function loadPRs({ cwd, remotes, track }) {
       };
     }
     try {
-      raw = await fetchRestPrs(owner, repo, token);
+      ({ prs: raw, truncated } = await fetchRestPrs(owner, repo, token));
       source = "rest";
     } catch (restErr) {
       return {
@@ -182,18 +209,26 @@ async function loadPRs({ cwd, remotes, track }) {
   for (const list of prs.values()) {
     list.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
   }
-  return { provider: "github", source, repo: { owner, repo }, prs, error: null };
+  return { provider: "github", source, repo: { owner, repo }, prs, error: null, truncated };
 }
 
 /** Close one PR via the backend that was used to read it. */
-async function closePR({ owner, repo, source, pr, comment }) {
+export async function closePR({ owner, repo, source, pr, comment }) {
   const target = `${owner}/${repo}`;
   if (source === "gh") {
     const args = ["pr", "close", String(pr.number), "--repo", target];
     if (comment) args.push("--comment", comment);
     const r = spawnSync("gh", args, { encoding: "utf8" });
-    if (!r.status) return null;
-    throw new PRBackendError((r.stderr || "gh failed").trim().split("\n").pop());
+    // A missing gh binary shows up as r.error with status undefined. Treating
+    // that as success would report "closed" for a PR that is still open —
+    // surface it as an error instead (regression: it used to return null).
+    if (r.error) {
+      throw new PRBackendError(`gh unavailable: ${r.error.message}`);
+    }
+    if (r.status !== 0) {
+      throw new PRBackendError((r.stderr || "gh failed").trim().split("\n").pop());
+    }
+    return null;
   }
   if (source === "rest") {
     const token = process.env.GITHUB_TOKEN;
@@ -203,7 +238,7 @@ async function closePR({ owner, repo, source, pr, comment }) {
       "User-Agent": "git-cleanup",
       "Content-Type": "application/json",
     };
-    const patch = await fetch(`https://api.github.com/repos/${target}/pulls/${pr.number}`, {
+    const patch = await fetchWithTimeout(`https://api.github.com/repos/${target}/pulls/${pr.number}`, {
       method: "PATCH",
       headers,
       body: JSON.stringify({ state: "closed" }),
@@ -212,7 +247,7 @@ async function closePR({ owner, repo, source, pr, comment }) {
       throw new PRBackendError(`GitHub API ${patch.status}: ${(await patch.text()).slice(0, 300)}`);
     }
     if (comment) {
-      const post = await fetch(`https://api.github.com/repos/${target}/issues/${pr.number}/comments`, {
+      const post = await fetchWithTimeout(`https://api.github.com/repos/${target}/issues/${pr.number}/comments`, {
         method: "POST",
         headers,
         body: JSON.stringify({ body: comment }),
@@ -226,6 +261,86 @@ async function closePR({ owner, repo, source, pr, comment }) {
   throw new PRBackendError("no PR backend available to close PRs");
 }
 
+// ---- issues capability (report-issue) --------------------------------------
+// Keeps ONE issue with a fixed title current on this forge: find by exact
+// title (PRs on the issues endpoint are ignored), then create or update its
+// body. The dedup search is sorted most-recently-updated so a weekly-updated
+// report issue survives the pagination cap even on repos with thousands of
+// newer open issues.
+
+const ISSUE_PER_PAGE = 100;
+const ISSUE_MAX_PAGES = 5; // 500 issues max searched per run
+const LABEL = "GitHub";
+
+export const issues = {
+  /** Token + endpoints for report-issue on this forge (throws ForgeError). */
+  context(remoteUrl, env = process.env) {
+    const p = parseGitHubRemote(remoteUrl);
+    if (!p) throw new ForgeError(`cannot parse GitHub remote: ${remoteUrl}`);
+    if (!env.GITHUB_TOKEN) throw new ForgeError("no token available: set GITHUB_TOKEN");
+    return {
+      forge: "github",
+      apiBase: env.GITHUB_API_BASE || "https://api.github.com",
+      webBase: "https://github.com",
+      owner: p.owner,
+      repo: p.repo,
+      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}` },
+    };
+  },
+
+  /** The open issue with exactly `title`, or null. */
+  async findIssue(ctx, title) {
+    for (let page = 1; page <= ISSUE_MAX_PAGES; page++) {
+      const res = await apiFetch(
+        `${ctx.apiBase}/repos/${ctx.owner}/${ctx.repo}/issues?state=open&sort=updated&direction=desc&per_page=${ISSUE_PER_PAGE}&page=${page}`,
+        { headers: ctx.headers },
+        LABEL
+      );
+      const items = await res.json();
+      if (!Array.isArray(items)) break;
+      for (const it of items) {
+        if (it.pull_request) continue; // the issues endpoint returns PRs too
+        if (it.title === title) return { title: it.title, number: it.number, url: it.html_url };
+      }
+      if (!linkNext(res.headers?.get?.("link"))) break;
+    }
+    return null;
+  },
+
+  async createIssue(ctx, title, body) {
+    const res = await apiFetch(
+      `${ctx.apiBase}/repos/${ctx.owner}/${ctx.repo}/issues`,
+      {
+        method: "POST",
+        headers: { ...ctx.headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body }),
+      },
+      LABEL
+    );
+    const it = await res.json();
+    return { number: it.number, url: it.html_url };
+  },
+
+  async updateIssue(ctx, number, body) {
+    const res = await apiFetch(
+      `${ctx.apiBase}/repos/${ctx.owner}/${ctx.repo}/issues/${number}`,
+      {
+        method: "PATCH",
+        headers: { ...ctx.headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      },
+      LABEL
+    );
+    const it = await res.json();
+    return { number: it.number, url: it.html_url };
+  },
+
+  /** Where a created issue would live — the openable create page. */
+  previewUrl(ctx, title) {
+    return `${ctx.webBase}/${ctx.owner}/${ctx.repo}/issues/new?title=${encodeURIComponent(title)}`;
+  },
+};
+
 /** GitHub implementation of the forge provider contract. */
 export const githubProvider = {
   id: "github",
@@ -233,5 +348,6 @@ export const githubProvider = {
   findRemote: findGitHubRemote,
   loadPRs,
   closePR,
+  issues,
 };
 

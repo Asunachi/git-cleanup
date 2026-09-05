@@ -1,0 +1,63 @@
+name: 🐛 Bug report
+description: Something is broken or misbehaving
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. A good report includes the
+        exact commands you ran and the version output below — that makes it
+        reproducible in minutes instead of days.
+  - type: input
+    id: version
+    attributes:
+      label: git-cleanup version
+      description: Output of `git-cleanup --version` (or `npm ls -g @maliqkara/gitcleanup`)
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Environment
+      description: "Node and git versions + OS, e.g. `node v20.11.0 · git 2.43.0 · macOS 14.3`"
+      placeholder: node v20.11.0 · git 2.43.0 · macOS 14.3
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The exact commands you ran, in order. A branch layout sketch helps a lot.
+      placeholder: |
+        $ git-cleanup scan --verbose
+        ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include the full `--json` output if the bug shows up there.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: Paste your `.gitcleanup.json` (or `~/.config/git-cleanup/config.json`) with secrets removed.
+      render: jsonc
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and the README's documented behavior first
+        - label: I am not reporting the machine-generated "git-cleanup: branch report" issue

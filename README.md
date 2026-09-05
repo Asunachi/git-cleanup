@@ -1,16 +1,44 @@
 # git-cleanup
 
 [![CI](https://github.com/Asunachi/git-cleanup/actions/workflows/ci.yml/badge.svg)](https://github.com/Asunachi/git-cleanup/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@maliqkara%2Fgitcleanup)](https://www.npmjs.com/package/@maliqkara/gitcleanup)
+[![license](https://img.shields.io/github/license/Asunachi/git-cleanup)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D18-339933)](https://nodejs.org)
 
 A zero-dependency CLI that keeps your Git workspace pristine: it scans local
 and remote branches, cross-references each branch's activity (last commit,
-merge status, upstream state) with its pull-request status on GitHub, then
-safely prunes what is genuinely dead — merged branches past an age threshold,
-abandoned remote branches, and scratch branches you opted into deleting.
+merge status, upstream state) with its pull-request status on GitHub,
+GitLab, Bitbucket, and Gitea-family forges, then safely prunes what is
+genuinely dead — merged branches past an age threshold, abandoned remote
+branches, and scratch branches you opted into deleting.
 
 Built on the `git` binary only (never touches `.git` internals) with optional
-GitHub and GitLab enrichment via `gh` CLI or a `GITHUB_TOKEN`/`GITLAB_TOKEN`.
-Requires **Node.js ≥ 18**.
+GitHub, GitLab, Bitbucket, and Gitea enrichment via `gh` CLI or a
+`GITHUB_TOKEN`/`GITLAB_TOKEN`/`BITBUCKET_TOKEN`/`GITEA_TOKEN`. Requires
+**Node.js ≥ 18**, zero npm dependencies.
+
+## Contents
+
+- [Install](#install) — npx, npm, Homebrew, from source
+- [How it compares](#how-it-compares) — git-cleanup vs. other cleaners
+- [Safety model](#safety-model) — nothing is ever deleted automatically
+- [Usage](#usage) — `scan` / `prune` / `prs`
+- [GitHub integration](#github-integration) — PR-aware decisions
+- [Configuration](#configuration) — layered config, rules, multi-repo
+- [Automation / exit codes](#automation--exit-codes) — JSON + `--check` for CI
+- [GitHub Action](#github-action-unattended-scan-reports) — unattended reports
+- [Shell integration](#shell-completions) — completions, auto-scan hooks, pre-commit
+- [Performance](#performance) — measured scan times
+- [Development](#development) — tests, lint, playground
+- [Forge support](#forge-support) — GitHub, GitLab, Bitbucket, adding more
+- [Limitations & roadmap](#limitations--roadmap)
+
+<p align="center">
+  <img src="demo.gif" alt="git-cleanup in a real terminal: scan, prune with bundles, backup list, restore — 5-second loop" width="92%" />
+  <br />
+  <em>the real CLI, no cuts: <code>scan</code> → <code>prune</code> (bundles everything first) →
+  <code>backup list</code> → <code>backup restore</code></em>
+</p>
 
 <p align="center">
   <img src="demo.svg" alt="git-cleanup: scan &amp; prune demo" width="100%" />
@@ -33,29 +61,92 @@ The npm package is **`@maliqkara/gitcleanup`** (the unscoped name
 `git-cleanup` is held by an unrelated project, and npm blocks lookalikes);
 the CLI command stays `git-cleanup`.
 
-No install required to try it (pin `@latest` — npm ≥ 11's `npx` needs the
-explicit version to resolve a scoped package's bin):
+| Method | Command |
+| --- | --- |
+| Try it, no install | `npx -y @maliqkara/gitcleanup@latest scan` |
+| Install globally | `npm install -g @maliqkara/gitcleanup` |
+| Homebrew | `brew tap Asunachi/git-cleanup && brew install git-cleanup` |
+| From source | `git clone https://github.com/Asunachi/git-cleanup.git && cd git-cleanup && node bin/git-cleanup.mjs scan` |
+
+Pin `@latest` when using `npx` — npm ≥ 11's `npx` needs the explicit
+version to resolve a scoped package's bin. The Homebrew formula installs the
+exact npm tarball of the pinned release (kept in `Formula/git-cleanup.rb`,
+updated on every release). There is no build step and no `npm install` for
+any method: the tool runs on Node built-ins only.
+
+Then, inside any git repository:
 
 ```bash
-npx -y @maliqkara/gitcleanup@latest scan
-```
-
-Or install it once:
-
-```bash
-npm install -g @maliqkara/gitcleanup   # adds the `git-cleanup` command to PATH
-
-# then, inside any git repository:
 git-cleanup scan
 ```
 
-No dependencies to install — you can also run straight from a checkout:
+### Shell completions
+
+Tab completion ships for bash, zsh, and fish:
 
 ```bash
-git clone https://github.com/Asunachi/git-cleanup.git
-cd git-cleanup
-node bin/git-cleanup.mjs scan
+git-cleanup completions bash > ~/.local/share/bash-completion/completions/git-cleanup
+# zsh:   git-cleanup completions zsh > "${fpath[1]}/_git-cleanup"   (then: compinit)
+# fish:  git-cleanup completions fish > ~/.config/fish/completions/git-cleanup.fish
 ```
+
+Restart your shell (or run `compinit` for zsh) and `git-cleanup <TAB>`
+completes commands, flags, and file arguments.
+
+### Automatic scans on every `cd` (shell hooks)
+
+Want branch hygiene without thinking about it? A shell hook runs
+`git-cleanup scan --summary` (one compact line per repo) whenever you `cd`
+into a git repository — and once for the directory each shell starts in —
+but at most once per repository per hour, so prompts stay snappy:
+
+```bash
+git-cleanup shell-hook bash >> ~/.bashrc      # or: zsh >> ~/.zshrc, fish
+# fish: git-cleanup shell-hook fish > ~/.config/fish/conf.d/git-cleanup.fish
+```
+
+The hook only **reports** — it never deletes anything — and scans offline
+(`--no-pr`) so a flaky network can never slow down or hang your prompt.
+Knobs: `GIT_CLEANUP_DISABLE=1` turns it off, `GIT_CLEANUP_SCAN_INTERVAL`
+changes the per-repo throttle (default 3600s), `GIT_CLEANUP_PR=1` enables
+PR enrichment, `GIT_CLEANUP_ARGS` passes extra flags.
+
+### A pre-commit reminder
+
+A sample `pre-commit` hook prints a reminder when your repository has
+prunable branches — it **warns, never blocks** commits, and also runs
+offline:
+
+```bash
+git-cleanup shell-hook pre-commit > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```
+
+Set `core.hooksPath` to a shared hooks directory to apply it to every repo
+on the machine. All snippets live in `support/dotfiles/` in the npm package
+and the repository.
+
+## How it compares
+
+Other branch cleaners exist, and several are good. git-cleanup is the one
+that cross-references forge state (an open PR keeps its branch alive; a
+closed-unmerged PR flags it abandoned), detects squash/rebase merges by
+content, and never deletes anything a human didn't confirm — with a backup
+bundle written before any deletion that could lose unique commits.
+
+| Tool | PR-aware | Squash/rebase detection | Recovery net | Forges | Status |
+| --- | --- | --- | --- | --- | --- |
+| **git-cleanup** | ✅ open/merged/closed PR state | ✅ content fingerprint (tip tree in base history) | ✅ git bundles before force/remote deletes | GitHub + GitLab + Bitbucket + Gitea | actively maintained |
+| `git branch --merged` / `git branch -d` (built-in) | ❌ | ❌ | n/a (safe by construction) | git | ships with git |
+| [git-sweep](https://github.com/arc90/git-sweep) | ❌ | ❌ | ❌ | git | unmaintained (last activity ~2016) |
+| [git-delete-merged-branches](https://github.com/hartwork/git-delete-merged-branches) | ❌ | ❌ | ❌ | git | actively maintained (Python) |
+| git-extras `git delete-merged-branches` | ❌ | ❌ | ❌ | git | actively maintained |
+| [git-clean-gone](https://github.com/DeflateAwning/git-clean-gone) | ❌ | n/a (different job: prune tracking refs of deleted remotes) | ❌ | git | actively maintained (Rust) |
+| GitHub “automatically delete head branches” | ✅ merged PRs only | ✅ (GitHub knows the PR) | ❌ | GitHub UI only | ships with GitHub |
+
+Why that matters in practice: ancestry-only tools delete a squash-merged
+branch's *unmerged-looking* twin as “unmerged” (or keep it forever), and
+without PR state nothing distinguishes an abandoned branch from one whose PR
+is still in review. git-cleanup was built for exactly those two gaps.
 
 ## Safety model
 
@@ -158,8 +249,8 @@ If `push --delete` fails because the branch was already deleted on the server
 tracking ref instead of reporting an error — verified with `ls-remote`, so
 auth/network failures and protected-branch refusals still surface as errors.
 
-Pass `--yes` (or set `GIT_CLEANUP_YES=1`) to run non-interactively. Remote
-deletion is `git push <remote> --delete <branch>`.
+Pass `--yes` (or `--force`, its alias — or set `GIT_CLEANUP_YES=1`) to run
+non-interactively. Remote deletion is `git push <remote> --delete <branch>`.
 
 ### `git-cleanup prs` — the stale PR automator
 
@@ -188,6 +279,59 @@ Only open PRs older than `closeStaleAfterDays` (falls back to
 `staleAfterDays`) are closed. Closing PRs never deletes branches — run
 `git-cleanup prune` separately for that.
 
+### `git-cleanup doctor` — the environment check
+
+One command answers "why isn't PR tracking working?": it checks git and
+`gh`, every forge token, config validity (including `forge.hosts` claims),
+and how each of the repo's remotes resolves:
+
+```
+$ git-cleanup doctor
+
+git-cleanup doctor
+  ✓ git version 2.43.0
+  ✓ gh version 2.50.0
+  ⚠ github token GITHUB_TOKEN — not set — set GITHUB_TOKEN to enable github PR enrichment and report-issue
+  ...
+  ✓ config: defaults < ~/.config/git-cleanup/config.json
+    forge.hosts: git.internal → gitea
+  ✓ repo /path/to/repo — 1 remote
+  ✓ origin → github (github.com)
+
+  6 ok · 4 warnings · 0 errors
+```
+
+Missing tokens, a missing `gh`, and unrecognized remotes (with a
+copy-pasteable `forge.hosts` hint) are **warnings** — pure-git cleanup still
+works — while a missing git binary or a broken config are **errors** that
+exit 1. `doctor --json` prints the whole report as one machine-readable
+document for scripts.
+
+### `git-cleanup backup` — see and restore what prune saved
+
+Before deleting anything that would lose unique commits (squash/rebase
+`-D`, force-rule `-D`, remote deletes), prune writes a timestamped git
+bundle. These commands make that safety net visible and restorable:
+
+```
+$ git-cleanup backup list
+
+📦 /path/to/repo
+  backup dir: /path/to/repo/.git/git-cleanup-backups
+  backup-2026-09-05T22-38-42-618Z-force.bundle
+    created 2026-09-05 · 12 KB · 1 branch: refs/heads/tmp/scratch
+    restore: git-cleanup backup restore backup-2026-09-05T22-38-42-618Z-force.bundle
+  ⚠ backup-2025-03-01T...-squash.bundle — older than backup.retainDays (30d); the next prune will sweep it
+```
+
+`backup restore <bundle>` fetches every branch in the bundle back **only if
+it does not already exist locally** — exact refspecs, no force — so a
+restore can never clobber current work; branches that exist are skipped with
+a note. It confirms first (`--yes` for scripts), and `backup list --json`
+prints the whole inventory (`file`, `sizeBytes`, `created`, `branches`,
+`wouldSweep`) for automation. Restoring is just `git fetch` under the hood,
+so a restored branch can be deleted again with plain git.
+
 ## GitHub integration
 
 PR state enriches the scan but never deletes anything by itself: an open PR
@@ -204,8 +348,15 @@ git-cleanup queries GitHub, in order:
 
 Without either, PR columns show `-` and cleanup falls back to pure git merge
 detection (this is what runs in the tests and works fully offline). Only
-GitHub and GitLab remotes are queried (see "Forge support"); other remotes
-are ignored.
+GitHub, GitLab, Bitbucket, and Gitea-family remotes are queried (see
+"Forge support"); other remotes are ignored.
+
+**Truncation is never silent.** PR lists are fetched in pages; very large
+repositories (over the fetch cap — currently 2,000 PRs via any REST API,
+500 via `gh`) stop paging and report `truncated: true` in `scan --json`
+plus a visible warning in the human report and `prs` output, so branches
+past the cap are never judged against a partial PR picture without you
+knowing.
 
 ## Configuration
 
@@ -245,6 +396,16 @@ Config files merge in this order (later wins):
   "remote": {
     "pruneMerged": true,
     "deleteAbandonedAfterDays": 0 // >0 enables deleting remote branches whose PR closed unmerged
+  },
+
+  // Claim self-hosted forge hostnames that the built-in detection can't
+  // recognize (used by PR tracking and report-issue alike). An explicit
+  // mapping always wins over the hostname heuristics.
+  "forge": {
+    "hosts": {
+      "git.example.com": "gitlab",
+      "git.internal": "gitea"
+    }
   },
 
   // Safety net: bundle refs before -D / remote deletions (default on).
@@ -312,7 +473,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.2.8
+      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.3.0
         with:
           path: .
           report: issue
@@ -325,18 +486,41 @@ retention, forge abstraction), `v0.2.4` (GitLab provider, cross-platform
 CI, interactive playground), `v0.2.5` (JSON contract + error-path fixes),
 `v0.2.6` (`-d` fallback for remote-merged branches, end-to-end prs tests),
 `v0.2.7` (single-source decision engine shared with the playground, flag-
-parsing fixes), and `v0.2.8` (current: CI freshness gate + fuzz parity
-tests) — all matching what npm serves.
-Pin `@v0.2.8` as shown; use `@main` only if you want the action to track
+parsing fixes), `v0.2.8` (CI freshness gate + fuzz parity tests), and
+`v0.3.0` (current: the report-issue flow folded into the CLI behind the
+forge `issues` contract, `doctor`, `backup list/restore`, `forge.hosts`
+for self-hosted GitLab/Gitea, a `--force` alias, and the GitLab CI
+template) — all matching what npm serves.
+Pin `@v0.3.0` as shown; use `@main` only if you want the action to track
 unreleased changes. (`v0.2.1`'s tree predates the action, so it cannot be
 used to pin it.)
 
+**Prefer the CLI over the action?** The same create-or-update posting is
+built into the tool itself: `git-cleanup report-issue` works on *any*
+forge — it reads the repository's remote, picks the matching provider
+(GitHub, GitLab, Bitbucket, Gitea), and reuses the same token env vars as
+PR enrichment (`GITHUB_TOKEN` / `GITLAB_TOKEN` / `BITBUCKET_TOKEN` /
+`GITEA_TOKEN`). Run the scan, render with the action's markdown renderer,
+post:
+
+```bash
+node bin/git-cleanup.mjs scan --json --repo . > scan.json
+node .github/actions/scan-report/report.mjs scan.json report.md
+GITHUB_TOKEN=… node bin/git-cleanup.mjs report-issue report.md
+```
+
+Add `--dry-run` to rehearse the post: it runs the same read-only search
+as a real run, resolves create-vs-update, prints the would-be action and
+target URL, and skips only the write. It needs the same env as a real run
+(token included) — it is a full rehearsal minus the side effect.
+
 **About the report issue you may see on this repo:** this repository's own
-demo workflow (`.github/workflows/report.yml`) dogfoods the action on a
-schedule and keeps a single issue titled `git-cleanup: branch report`
-current. That issue is **machine-generated and not a bug report** — the
-action creates it on the first run and updates it in place on every run
-after. Please don't file bug reports against it; open a fresh issue instead.
+schedule (`.github/workflows/report-issue.yml`) keeps a single issue
+titled `git-cleanup: branch report` current through that command — the
+GitHub twin of the GitLab `report-issue` CI job. That issue is
+**machine-generated and not a bug report** — the command creates it on
+the first run and updates it in place on every run after. Please don't
+file bug reports against it; open a fresh issue instead.
 
 **Shallow checkouts are handled automatically.** CI clones default to
 `fetch-depth: 1`, which hides history from merge detection (both ancestor
@@ -377,19 +561,28 @@ deletions themselves plus a bundle write.
 ## Development
 
 ```bash
-npm test   # node --test: unit + integration against real throwaway repos
+npm test    # node --test: unit + integration + fuzz against real throwaway repos
+npm run lint   # zero-dependency lint (syntax + whitespace invariants; runs in npm test too)
 ```
 
 Integration tests build a bare `origin` and a working clone with old merged
 branches, an orphaned branch, stale unmerged work, and protected branches,
 then assert `scan`, `prune`, and the CLI end-to-end (including `--check`
-exit codes).
+exit codes). Merge detection is additionally fuzzed against an oracle
+model: a seeded generator builds random real repositories (merge / squash /
+revert / no-op / divergent histories) and requires the analyzer's verdicts
+to match each branch's true fate — `MERGE_FUZZ_CASES` and `MERGE_FUZZ_SEED`
+scale and reseed it. The lint script is dependency-free and runs inside
+`npm test`, so a commit that breaks syntax or formatting can never go
+green.
 
 ## Limitations & roadmap
 
-* Bitbucket remotes work for git-based cleanup; PR enrichment is skipped
-  until a provider lands.
+* Bitbucket **Server** (self-hosted) remotes work for git-based cleanup; PR
+  enrichment is skipped until that API lands.
 * Age is measured from the tip commit of each branch.
+* PR lists are fetched up to a safety cap (2,000 via REST, 500 via `gh`);
+  hitting the cap is reported, never silent (see “GitHub integration”).
 * Merge detection is ancestry- or content-based (tip tree found in base
   history), which covers squash and rebase merges. It cannot detect merges
   whose code changed afterwards (e.g. cherry-picks that were amended), which
@@ -403,9 +596,50 @@ requests keyed by head branch (`loadPRs`), and close one with a comment
 (`closePR`) — and register in the `providers` map. All consumers read only
 that common shape, so a new forge is a new `src/providers/<forge>.mjs` plus
 one registry line, no changes in `analyze`/`classify`/`report`/`cli`/the
-Action. Remotes are detected by hostname: `github.com` and `gitlab.com`
-(plus self-hosted `*.gitlab.*` instances) resolve to their providers;
-unrecognized hosts degrade to pure-git cleanup with a clear message.
+Action. Remotes are detected by hostname: `github.com`, `gitlab.com` (plus
+self-hosted `*.gitlab.*` instances), `bitbucket.org`, and the Gitea-family
+hosts `gitea.com`, `codeberg.org`, and `forgejo.org` resolve to their
+providers; unrecognized hosts degrade to pure-git cleanup with a clear
+message. The `forge.hosts` config map claims extra hostnames explicitly
+(for example `{ "git.example.com": "gitlab", "git.internal": "gitea" }`)
+for self-hosted instances on custom domains — it always wins over the
+heuristics and is honored by PR tracking and `report-issue` alike.
+
+### Gitea / Codeberg / Forgejo
+
+Gitea's REST API is deliberately GitHub-shaped, so this provider speaks the
+same dialect: pull requests are read from `GET /api/v1/repos/{owner}/{repo}/pulls`
+(`state=all`, sorted by `sort=recentupdate`), with pagination following the
+`Link` header (falling back to `x-total-count`) and the same 2,000-item
+truncation cap as every other provider. A merge shows up the GitHub way —
+`state: closed` plus `merged_at` — so state mapping is identical. Closing a
+PR (`prs --close`) is `PATCH .../pulls/:number` with `{"state": "closed"}`,
+plus the comment on `.../issues/:number/comments`. Authentication is a
+`GITEA_TOKEN` env var sent as `Authorization: token <token>`; the API base
+is derived from the host (`https://gitea.com/api/v1`, `codeberg.org`,
+`forgejo.org`) or overridden with `GITEA_API_BASE`. Self-hosted Gitea and
+Forgejo instances on arbitrary domains can't be recognized by hostname
+(unlike GitLab, "gitea" isn't in the host) — claim them with the
+`forge.hosts` config (e.g. `{ "git.internal": "gitea" }`), which derives
+the API base `https://<host>/api/v1` (standard install layout) or honors
+`GITEA_API_BASE`.
+
+### Bitbucket
+
+Pull requests are read over the Bitbucket Cloud REST API (`state=OPEN` +
+`MERGED` + `DECLINED` + `SUPERSEDED`, sorted by `-updated_on`), keyed by
+`source.branch`, with pagination followed via the API's embedded `next` URL
+and the same 2,000-item truncation cap as the other providers. Authentication
+is a `BITBUCKET_TOKEN` env var (an [app
+password](https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/)
+with pull-request read/write permissions suffices) sent as `Authorization:
+Bearer`; without one, PR columns show `-` and cleanup falls back to pure
+git detection. The API base defaults to `https://api.bitbucket.org/2.0`
+(override with `BITBUCKET_API_BASE`). Closing a PR (`prs --close`) uses
+`POST .../pullrequests/:id/decline` — the API's standard close-without-merge
+action — and posts the comment to `.../pullrequests/:id/comments`.
+Bitbucket Server (self-hosted) exposes a different API and is not claimed;
+those remotes degrade to pure-git cleanup.
 
 ### GitLab
 
@@ -422,12 +656,38 @@ resolves the project as `group/sub/repo`. Closing an MR
 (`prs --close`) uses `PUT /merge_requests/:iid` with a `state_event: close`
 and posts the comment as a note.
 
+**GitLab CI.** The repository ships a ready `.gitlab-ci.yml` template that
+mirrors the GitHub workflow: a Node 18/20/22 test matrix with the deep
+50,000-shape parity sweep, a CLI smoke check, a playground-freshness gate,
+a scheduled seed re-sweep, a scheduled `scan --check` job that fails its
+pipeline when branches are prunable, and a scheduled `report-issue` job
+that renders the scan with the *same markdown renderer the GitHub side
+uses* and keeps one issue titled `git-cleanup: branch report` current via
+the Issues API — authenticated with `GITLAB_TOKEN`, a masked project
+token with `api` scope (validated against a live instance: GitLab does
+not grant CI/CD job tokens Issues API write access by default, so
+`CI_JOB_TOKEN` is only a fallback for projects that configure Settings →
+CI/CD → Job token permissions). The GitHub twin of that job is
+`.github/workflows/report-issue.yml`, which runs the same
+`git-cleanup report-issue` command (posts with the automatic
+`GITHUB_TOKEN`, no `gh` binary needed) — the command detects the forge
+from the remote, so the identical invocation works on GitHub, GitLab,
+Bitbucket, and Gitea, and `--dry-run` rehearses the post (read-only
+search resolves create-vs-update, only the write is skipped). Both
+scheduled report jobs rehearse with `--dry-run` before posting, so a
+broken token or API change fails the run loudly instead of silently
+skipping the report. Copy
+the template to your repo root (or merge its jobs into an existing
+`.gitlab-ci.yml`) and create a schedule under **CI/CD → Schedules** for the
+nightly pieces. Set `GITLAB_TOKEN` (a project access token with `read_api`)
+if you want the scan job's PR enrichment.
+
 Roadmap, in order of expected value:
 
-1. **GitLab CI integration** — a `.gitlab-ci.yml` template mirroring
-   `.github/workflows/ci.yml` (test matrix + CLI smoke), and optionally a
-   scheduled pipeline that runs `git-cleanup scan` with `CI_PROJECT_*`
-   variables as the report channel, since GitLab has no Action market — the
-   CLI is invoked directly instead.
-2. **Bitbucket** — same contract over its REST API when a maintainer shows
-   up; everything else already treats remotes generically.
+1. **Bitbucket Server** (self-hosted) PR enrichment — its REST API (under
+   `/rest/api/`) differs from Cloud's; everything else already treats
+   remotes generically (its hostnames can already be claimed with
+   `forge.hosts` if the API ever matches).
+2. **A dedicated Homebrew tap repository** — this repo already works as a
+   tap (`brew tap Asunachi/git-cleanup`); a standalone tap would version
+   the formula independently of the app repository.

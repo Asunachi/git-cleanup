@@ -25,12 +25,16 @@ function ask(question, defaultYes) {
   });
 }
 
-/** Confirm an action; --yes or GIT_CLEANUP_YES skips asking. */
-export async function confirmed(label, defaultYes, opts) {
+/**
+ * Confirm an action; --yes or GIT_CLEANUP_YES skips asking.
+ * `nothingPhrase` ends the non-interactive error ("nothing was deleted" for
+ * prune, "nothing was restored" for backup restore).
+ */
+export async function confirmed(label, defaultYes, opts, nothingPhrase = "nothing was deleted") {
   if (opts.yes || process.env.GIT_CLEANUP_YES === "1") return true;
   if (!interactive()) {
     throw new Error(
-      `non-interactive session: pass --yes to allow "${label}" (nothing was deleted)`
+      `non-interactive session: pass --yes (or --force) to allow "${label}" (${nothingPhrase})`
     );
   }
   return ask(label, defaultYes);
@@ -47,7 +51,7 @@ export async function confirmed(label, defaultYes, opts) {
 // ref, and the bundle covers even that ref vanishing later.
 // Disable with config backup.enabled = false.
 
-function backupDir(repo, cfg) {
+export function backupDir(repo, cfg) {
   const dir = cfg.backup?.dir;
   if (dir) return resolve(dir);
   const gitDir = repo.meta?.gitDir ?? join(repo.root ?? ".", ".git");

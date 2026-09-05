@@ -12,12 +12,16 @@ a Node.js CLI that shells out to `git` and never touches `.git` internals.
 ## Getting started
 
 ```bash
-npm test          # node --test: unit + integration tests
+npm test          # node --test: unit + integration + fuzz tests
+npm run lint      # zero-dependency lint (also runs inside npm test)
 node bin/git-cleanup.mjs scan   # try it against a git repo you own
 ```
 
 There is no build step and no `npm install` — the code runs on Node built-ins
 only. Please keep it that way unless there is a very strong reason not to.
+The linter (`scripts/lint.mjs`) is dependency-free: it syntax-checks every
+JS file and enforces no-tabs / no-trailing-whitespace / final-newline, and it
+runs as part of `npm test`, so a lint violation can never go green.
 
 ## Code layout
 
@@ -31,31 +35,66 @@ only. Please keep it that way unless there is a very strong reason not to.
 - `src/analyze.mjs` — gathers one repo's state and classifies every branch.
 - `src/config.mjs` — config discovery and layering.
 - `src/forge.mjs` — forge abstraction: provider registry, remote detection by
-  hostname, and the shared PR shape consumed by everything else.
+  hostname, and the shared PR shape consumed by everything else. The
+  contract includes each provider's `issues` capability (context, find /
+  create / update / preview URL), which `report-issue` loops over.
 - `src/providers/github.mjs` — the GitHub provider behind that contract (`gh`
-  CLI, then REST fallback). New forges (GitLab, Bitbucket) add a sibling here
-  and register in `forge.mjs`.
+  CLI, then REST fallback, plus the `issues` capability). New forges
+  (GitLab, Bitbucket, Gitea) add a sibling here and register in `forge.mjs`
+  — nothing outside the provider needs to change for `report-issue`.
+- `src/report-issue.mjs` — the `report-issue` command as a thin generic loop
+  over the provider `issues` contract (all forge-specific logic lives in the
+  providers).
 - `src/prune.mjs` — deletion with confirmation guards.
 - `src/report.mjs` / `src/cli.mjs` — rendering and command-line interface.
 - `test/` — unit tests plus integration tests against throwaway repos
   (`support/helpers.mjs` holds the repo-building fixtures; it lives outside
   `test/` so Node's test runner doesn't count it as a test file).
+- `support/completions/` — the bash/zsh/fish completion scripts printed by
+  `git-cleanup completions <shell>`; they ship in the npm tarball.
+- `support/dotfiles/` — the shell-hook and pre-commit snippets printed by
+  `git-cleanup shell-hook <kind>`; also shipped in the npm tarball.
+- `Formula/git-cleanup.rb` — the Homebrew formula that makes this repo
+  tappable (`brew tap Asunachi/git-cleanup`).
 - `scripts/sync-playground.mjs` — bundles `src/engine.mjs` into `index.html`
   (run `npm run sync:playground` after editing the engine).
 - `index.html` — a standalone documentation page with interactive demos that
   run the real engine. Don't hand-edit between the `__ENGINE__` markers:
-  regenerate with `npm run sync:playground`.
+  regenerate with `npm run sync:playground`. The page pins its suite size in
+  two spots (header badge + run-it-yourself snippet); if you add or remove
+  tests, the parity test (`test/playground-parity.test.mjs`) will tell you
+to update them.
 
 ## Making changes
 
 1. Open an issue or PR describing what you're changing and why.
 2. Keep changes scoped. Add a test for anything you fix.
-3. Run `npm test` — everything must pass.
+3. Run `npm test` — everything must pass (it includes the linter).
 4. If you touched the decision logic (`src/engine.mjs`), run
    `npm run sync:playground` to re-bundle it into the demo page and commit
    the result — CI enforces this twice: `test/playground-parity.test.mjs`
    fails if the page's copy drifts, and the `playground-fresh` job fails the
    build if the committed bundle isn't the output of the sync script.
+5. If you changed CLI surface (flags, subcommands), update `--help`
+   (`src/cli.mjs` USAGE), the completion scripts
+   (`support/completions/`), and the README's usage examples.
+6. If you added or removed tests, the page's test-count badge must be
+   updated to match (the parity test enforces it).
+7. If you changed CI behavior in `.github/workflows/ci.yml` (test matrix,
+   smoke checks, freshness gates), mirror the change in the
+   `.gitlab-ci.yml` template — `test/ci-parity.test.mjs` pins both files'
+   structure and asserts they cannot drift apart (node matrix, fuzz volume,
+   smoke steps, freshness gate, scheduled sweep), and
+   `test/gitlab-ci.test.mjs` pins the template's jobs. The same rule
+   applies to the scheduled report channel: `test/ci-parity.test.mjs`
+   asserts `.github/workflows/report-issue.yml` ↔ the template's
+   `report-issue` job (schedule, command, renderer, issue title), so a
+   change to either side must be mirrored in the other. Before merging a
+   change to `.gitlab-ci.yml`, also run it through GitLab's CI Lint
+   (CI/CD → Pipelines → CI Lint): the structural tests catch indentation
+   and command existence, not runner-side semantics.
+8. Document user-visible changes under `[Unreleased]` in `CHANGELOG.md`
+   (Keep a Changelog + semver).
 
 ## Design constraints to respect
 
@@ -83,7 +122,12 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
    update every GitHub Action pin to the new tag: the README example
    (`scan-report@vX.Y.Z`), `docs/launch-post.md`, and `docs/marketplace.md`
    wherever they show one. The pins must land in the release tree so the
-   tag itself carries them.
+   tag itself carries them. Also update the Homebrew formula
+   (`Formula/git-cleanup.rb`): bump `version` and replace `sha256` with the
+   digest of the published tarball, computed AFTER publishing from the
+   registry artifact (`npm pack @maliqkara/gitcleanup@<v> --pack-destination
+   /tmp && shasum -a 256 /tmp/maliqkara-gitcleanup-<v>.tgz`), and verify it
+   with `brew install --build-from-source ./Formula/git-cleanup.rb`.
 2. Run `npm publish --dry-run` first: the `files` field keeps the tarball to
    `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
    before anything goes out.

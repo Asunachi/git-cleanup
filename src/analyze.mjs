@@ -76,6 +76,7 @@ export async function analyzeRepo(repoPath, cfg) {
     cwd: root,
     remotes: meta.remotes,
     track: cfg.pr.track,
+    hostMap: cfg.forge?.hosts ?? {},
   });
 
   const nowSec = Math.floor(Date.now() / 1000);

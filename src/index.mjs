@@ -27,5 +27,8 @@ export {
   upstreamOf,
 } from "./git.mjs";
 export { pruneRepo, confirmed, interactive } from "./prune.mjs";
+export { DEFAULT_TITLE, postReport, resolveForgeContext } from "./report-issue.mjs";
+export { runDoctor, printDoctor } from "./doctor.mjs";
+export { listBackupFiles, restoreBackup } from "./backup.mjs";
 export { actionableDelete, countBranches, reposToJSON } from "./report.mjs";
 export { globToRegExp, matchesAny } from "./util.mjs";

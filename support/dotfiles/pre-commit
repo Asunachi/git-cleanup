@@ -1,0 +1,34 @@
+#!/bin/sh
+# git-cleanup pre-commit hook (sample): reminds you when your repository has
+# prunable branches. It only WARNS — commits are never blocked.
+#
+# Install (per repo):
+#   git-cleanup shell-hook pre-commit > .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+# Or copy support/dotfiles/pre-commit from a checkout. To apply to every
+# repo on this machine, set core.hooksPath to a shared hooks directory.
+#
+# Knobs (environment variables):
+#   GIT_CLEANUP_DISABLE=1   turn the reminder off
+#   GIT_CLEANUP_BIN=<path>  the git-cleanup binary to use (default: git-cleanup
+#                           from PATH)
+#   GIT_CLEANUP_HOOK_ARGS   extra scan arguments (e.g. "--verbose")
+#
+# The scan runs offline (--no-pr) so a flaky network can never slow down or
+# block a commit. If the scan takes too long for your taste on big repos,
+# just delete the hook.
+
+[ -n "$GIT_CLEANUP_DISABLE" ] && exit 0
+BIN="${GIT_CLEANUP_BIN:-git-cleanup}"
+command -v "$BIN" >/dev/null 2>&1 || exit 0
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+
+out="$("$BIN" scan --summary --no-pr --repo "$root" ${GIT_CLEANUP_HOOK_ARGS:-} 2>/dev/null)" || true
+
+if printf '%s\n' "$out" | grep -Eq '[1-9][0-9]* prunable'; then
+    printf '\n  ⚠ git-cleanup: prunable branches found — run `git-cleanup prune` after committing:\n'
+    printf '%s\n' "$out" | sed 's/^/  /'
+    printf '\n'
+fi
+
+exit 0

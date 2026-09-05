@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/Asunachi/git-cleanup/security/advisories/new
+    about: Please use GitHub's private vulnerability reporting — don't file security issues publicly.
+  - name: 💬 Questions and discussions
+    url: https://github.com/Asunachi/git-cleanup/discussions
+    about: Ask questions and share ideas in GitHub Discussions (when enabled).

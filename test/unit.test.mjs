@@ -315,6 +315,27 @@ test("backup config: enabled by default, normalizes, can be disabled", () => {
   assert.throws(() => normalizeConfig({ backup: { retainDays: -1 } }));
 });
 
+test("forge.hosts config: normalized, defaults empty, unknown forges rejected", () => {
+  assert.deepEqual(defaults().forge.hosts, {});
+  assert.deepEqual(
+    normalizeConfig({ forge: { hosts: { "git.example.com": "gitlab", "git.internal": "gitea" } } }).forge.hosts,
+    { "git.example.com": "gitlab", "git.internal": "gitea" }
+  );
+  assert.throws(
+    () => normalizeConfig({ forge: { hosts: { "git.example.com": "sourcehut" } } }),
+    /unknown forge "sourcehut" \(known: github, gitlab, bitbucket, gitea\)/
+  );
+  assert.throws(() => normalizeConfig({ forge: { hosts: [] } }), /must be an object/);
+  // Merging with defaults keeps forge.hosts present and empty by default.
+  const cfg = loadConfig({
+    configFile: null,
+    repoFlags: [],
+    cwd: tmpdir(),
+    homeFile: join(tmpdir(), "gc-home-nonexistent.json"),
+  }).cfg;
+  assert.deepEqual(cfg.forge.hosts, {});
+});
+
 test("config layers: defaults < cwd config < --config", () => {
   const dir = mkdtempSync(join(tmpdir(), "gc-cfg-"));
   try {

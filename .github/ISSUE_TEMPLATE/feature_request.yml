@@ -1,0 +1,30 @@
+name: ✨ Feature request
+description: An idea to make git-cleanup better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The workflow or pain point, not the feature itself. "I can't tell which remote branches are abandoned" beats "add a --foo flag".
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed behavior
+      description: How should it behave, including edge cases? New CLI flags, config keys, or provider support?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you try (other tools, git plumbing, config workarounds)?
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Fit with the project
+      options:
+        - label: This fits the zero-dependency / safety-first philosophy (or explains why it must break it)
+        - label: I can help implement and test this

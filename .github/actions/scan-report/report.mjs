@@ -73,6 +73,11 @@ export function render(report, opts = {}) {
     if (repo.headBranch) meta.push(`HEAD: ${repo.headBranch}`);
     if (repo.pr?.repo) meta.push(`PRs: ${repo.pr.repo.owner}/${repo.pr.repo.repo} (${repo.pr.source})`);
     if (meta.length) out.push(`_${meta.join(" · ")}_`);
+    if (repo.pr?.truncated) {
+      out.push(
+        `> ⚠️ PR data was truncated at the fetch cap — very old branches may be under-reported.`
+      );
+    }
     out.push(`**${del.length} prunable · ${warn.length} stale · ${branches.length - del.length - warn.length} kept**`);
 
     if (del.length === 0 && warn.length === 0) {

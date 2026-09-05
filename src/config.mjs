@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { defaults } from "./classify.mjs";
+import { providers } from "./forge.mjs";
 
 const CONFIG_NAMES = [".gitcleanup.json", ".git-cleanup.json"];
 export const HOME_CONFIG = join(homedir(), ".config", "git-cleanup", "config.json");
@@ -123,6 +124,30 @@ export function normalizeConfig(raw) {
       norm.retainDays = clampNum(b.retainDays, "backup.retainDays");
     }
     out.backup = norm;
+  }
+  if (raw.forge && typeof raw.forge === "object") {
+    const f = raw.forge;
+    const norm = {};
+    if (f.hosts !== undefined && f.hosts !== null) {
+      if (typeof f.hosts !== "object" || Array.isArray(f.hosts)) {
+        throw new ConfigError(
+          `config key "forge.hosts" must be an object mapping hostnames to forge ids`
+        );
+      }
+      const hosts = {};
+      for (const [host, forgeId] of Object.entries(f.hosts)) {
+        const id = String(forgeId);
+        if (!Object.prototype.hasOwnProperty.call(providers, id)) {
+          const known = Object.keys(providers).join(", ");
+          throw new ConfigError(
+            `forge.hosts["${host}"]: unknown forge "${id}" (known: ${known})`
+          );
+        }
+        hosts[host] = id;
+      }
+      norm.hosts = hosts;
+    }
+    out.forge = norm;
   }
   if (Array.isArray(raw.protected)) out.protected = [...raw.protected];
   if (Array.isArray(raw.rules)) {

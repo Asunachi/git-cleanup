@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.2.8
+      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.3.0
         with:
           report: issue
 ```

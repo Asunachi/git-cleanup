@@ -85,7 +85,7 @@ if [ "${INPUT_REPORT:-issue}" = "issue" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; th
     TITLE="${INPUT_ISSUE_TITLE:-git-cleanup: branch report}"
     # Reuse one open issue with this exact title instead of commenting per run.
     EXISTING="$(
-      gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+      gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
         --json number,title 2>/dev/null |
         TITLE="$TITLE" node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const t=process.env.TITLE;const hit=JSON.parse(d).find(i=>i.title===t);if(hit)console.log(hit.number)})'
     )"

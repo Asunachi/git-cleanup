@@ -13,12 +13,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { main } from "../src/cli.mjs";
+import { closePR, PRBackendError } from "../src/providers/github.mjs";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -47,10 +48,11 @@ function mkRepo(owner, repo) {
   return dir;
 }
 
-function httpRes(body, status = 200) {
+function httpRes(body, status = 200, headers = {}) {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: { get: (name) => headers[name.toLowerCase()] ?? null },
     async text() {
       return typeof body === "string" ? body : JSON.stringify(body);
     },
@@ -84,6 +86,45 @@ function ghShimDir() {
   const dir = mkdtempSync(join(tmpdir(), "gc-ghshim-"));
   mkdirSync(join(dir, "gh"));
   return dir;
+}
+
+/**
+ * A working fake `gh` CLI on PATH: `pr list` cats $FAKE_GH_JSON, `pr close`
+ * appends "close:<number>" to $FAKE_GH_LOG. POSIX-only (the shim is a shell
+ * script; spawning .cmd files requires a shell, which the CLI never uses).
+ */
+function fakeGhEnv(prsJson) {
+  const dir = mkdtempSync(join(tmpdir(), "gc-fakegh-"));
+  const homeDir = mkdtempSync(join(tmpdir(), "gc-fakegh-home-"));
+  const jsonFile = join(dir, "prs.json");
+  const logFile = join(dir, "close.log");
+  writeFileSync(jsonFile, JSON.stringify(prsJson));
+  writeFileSync(
+    join(dir, "gh"),
+    [
+      "#!/bin/sh",
+      'if [ "$1" = "pr" ] && [ "$2" = "list" ]; then cat "$FAKE_GH_JSON"; exit 0; fi',
+      'if [ "$1" = "pr" ] && [ "$2" = "close" ]; then echo "close:$3" >> "$FAKE_GH_LOG"; exit 0; fi',
+      "exit 1",
+      "",
+    ].join("\n")
+  );
+  chmodSync(join(dir, "gh"), 0o755);
+  return {
+    env: {
+      ...process.env,
+      HOME: homeDir,
+      GIT_CLEANUP_NO_COLOR: "1",
+      FAKE_GH_JSON: jsonFile,
+      FAKE_GH_LOG: logFile,
+      PATH: `${dir}${delimiter}${process.env.PATH}`,
+    },
+    logFile,
+    cleanup() {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+    },
+  };
 }
 
 /** Swap in the stubbed fetch + captured console; returns a restore() fn. */
@@ -293,5 +334,304 @@ test("prs --close --yes --json: closes stale PRs via PATCH + comment, exit 0", a
   } finally {
     env.cleanup();
     rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---- PR pagination truncation detection ------------------------------------
+// A repo with more PRs than the fetch cap must not silently judge branches
+// against an incomplete PR picture: scan --json reports pr.truncated and the
+// human report says so out loud.
+
+test("scan --json reports truncated when the REST API keeps paginating past the cap", async () => {
+  const repo = mkRepo("acme", "huge");
+  const seen = [];
+  const handler = async (url) => {
+    const u = String(url);
+    const page = Number(new URL(u).searchParams.get("page") ?? "1");
+    seen.push(page);
+    if (page <= 20) {
+      const items = Array.from({ length: 100 }, (_, i) =>
+        ghPr({
+          owner: "acme",
+          repo: "huge",
+          number: (page - 1) * 100 + i + 1,
+          title: `pr ${page}-${i}`,
+          headRef: `branch-${page}-${i}`,
+          updatedDaysAgo: 90,
+        })
+      );
+      return httpRes(items, 200, {
+        link: `<https://api.github.com/repos/acme/huge/pulls?page=${page + 1}>; rel="next"`,
+      });
+    }
+    return httpRes({ message: "not found" }, 404);
+  };
+
+  const env = runEnv();
+  try {
+    process.env = env.env;
+    const run = stubRun(handler);
+    let code;
+    try {
+      code = await main(["scan", "--json", "--repo", repo]);
+    } finally {
+      run.restore();
+    }
+    assert.equal(code, 0, run.err.join("\n"));
+    const doc = JSON.parse(run.out.join("\n"));
+    assert.equal(doc.repos[0].pr.source, "rest");
+    assert.equal(doc.repos[0].pr.truncated, true);
+    // Stopped at the cap (20 pages), never fetched past it.
+    assert.equal(seen.length, 20);
+    assert.equal(seen[seen.length - 1], 20);
+  } finally {
+    env.cleanup();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("scan flags truncated PR data in the human report too", async () => {
+  const repo = mkRepo("acme", "huge-human");
+  const handler = async (url) => {
+    const u = String(url);
+    const page = Number(new URL(u).searchParams.get("page") ?? "1");
+    if (page <= 20) {
+      return httpRes(
+        Array.from({ length: 100 }, (_, i) =>
+          ghPr({
+            owner: "acme",
+            repo: "huge-human",
+            number: (page - 1) * 100 + i + 1,
+            title: `pr ${i}`,
+            headRef: `branch-${i}`,
+            updatedDaysAgo: 90,
+          })
+        ),
+        200,
+        { link: `<https://api.github.com/repos/acme/huge-human/pulls?page=${page + 1}>; rel="next"` }
+      );
+    }
+    return httpRes({ message: "not found" }, 404);
+  };
+
+  const env = runEnv();
+  try {
+    process.env = env.env;
+    const run = stubRun(handler);
+    let code;
+    try {
+      code = await main(["scan", "--repo", repo]);
+    } finally {
+      run.restore();
+    }
+    assert.equal(code, 0, run.err.join("\n"));
+    assert.match(run.out.join("\n"), /PR data truncated/);
+  } finally {
+    env.cleanup();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("scan --json omits truncated when pagination ends naturally", async () => {
+  const repo = mkRepo("acme", "small");
+  const handler = async (url) => {
+    const u = String(url);
+    const page = Number(new URL(u).searchParams.get("page") ?? "1");
+    if (page === 1) {
+      // Full page but the API says there is no next page: not truncated.
+      return httpRes(
+        Array.from({ length: 100 }, (_, i) =>
+          ghPr({
+            owner: "acme",
+            repo: "small",
+            number: i + 1,
+            title: `pr ${i}`,
+            headRef: `branch-${i}`,
+            updatedDaysAgo: 10,
+          })
+        ),
+        200,
+        {}
+      );
+    }
+    return httpRes({ message: "not found" }, 404);
+  };
+
+  const env = runEnv();
+  try {
+    process.env = env.env;
+    const run = stubRun(handler);
+    let code;
+    try {
+      code = await main(["scan", "--json", "--repo", repo]);
+    } finally {
+      run.restore();
+    }
+    assert.equal(code, 0, run.err.join("\n"));
+    const doc = JSON.parse(run.out.join("\n"));
+    assert.equal(doc.repos[0].pr.truncated, undefined);
+  } finally {
+    env.cleanup();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---- the `gh` CLI path (POSIX only: the shim is a shell script) -------------
+
+const onWindows = process.platform === "win32";
+
+function ghPrShape(number, headRef, ageDays) {
+  return {
+    number,
+    title: `pr ${number}`,
+    state: "OPEN",
+    isDraft: false,
+    url: `https://github.com/acme/ghbig/pull/${number}`,
+    headRefName: headRef,
+    updatedAt: new Date(Date.now() - ageDays * DAY).toISOString(),
+    mergedAt: null,
+  };
+}
+
+test("scan --json reports truncated when gh returns more PRs than its cap", {
+  skip: onWindows ? "fake gh shim is POSIX-only" : false,
+}, async () => {
+  const repo = mkRepo("acme", "ghbig");
+  const env = fakeGhEnv(
+    Array.from({ length: 501 }, (_, i) => ghPrShape(i + 1, `branch-${i}`, 100))
+  );
+  try {
+    process.env = env.env;
+    const run = stubRun(async () => {
+      throw new Error("REST must not be consulted when gh works");
+    });
+    let code;
+    try {
+      code = await main(["scan", "--json", "--repo", repo]);
+    } finally {
+      run.restore();
+    }
+    assert.equal(code, 0, run.err.join("\n"));
+    const doc = JSON.parse(run.out.join("\n"));
+    assert.equal(doc.repos[0].pr.source, "gh");
+    assert.equal(doc.repos[0].pr.truncated, true);
+  } finally {
+    env.cleanup();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("scan --json is not truncated when gh returns exactly its cap", {
+  skip: onWindows ? "fake gh shim is POSIX-only" : false,
+}, async () => {
+  const repo = mkRepo("acme", "ghcap");
+  const env = fakeGhEnv(
+    Array.from({ length: 500 }, (_, i) => ghPrShape(i + 1, `branch-${i}`, 100))
+  );
+  try {
+    process.env = env.env;
+    const run = stubRun(async () => {
+      throw new Error("REST must not be consulted when gh works");
+    });
+    let code;
+    try {
+      code = await main(["scan", "--json", "--repo", repo]);
+    } finally {
+      run.restore();
+    }
+    assert.equal(code, 0, run.err.join("\n"));
+    const doc = JSON.parse(run.out.join("\n"));
+    assert.equal(doc.repos[0].pr.truncated, undefined);
+  } finally {
+    env.cleanup();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("prs --close --yes closes stale PRs through the real gh CLI path", {
+  skip: onWindows ? "fake gh shim is POSIX-only" : false,
+}, async () => {
+  const repo = mkRepo("acme", "ghclose");
+  const env = fakeGhEnv([
+    { ...ghPrShape(5, "feature/a", 60), headRefName: "feature/a" },
+    { ...ghPrShape(6, "feature/b", 3), headRefName: "feature/b" },
+  ]);
+  try {
+    process.env = env.env;
+    const run = stubRun(async () => {
+      throw new Error("REST must not be consulted when gh works");
+    });
+    let code;
+    try {
+      code = await main(["prs", "--close", "--yes", "--repo", repo]);
+    } finally {
+      run.restore();
+    }
+    assert.equal(code, 0, run.err.join("\n"));
+    assert.match(run.out.join("\n"), /✓ closed #5/);
+    // The stale PR was handed to `gh pr close 5`; the fresh one was not.
+    const log = readFileSync(env.logFile, "utf8").trim();
+    assert.deepEqual(log.split("\n"), ["close:5"]);
+  } finally {
+    env.cleanup();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("a forge API that never responds times out instead of hanging the run", async () => {
+  // Shell hooks and cron jobs must never hang on a dead network: the fetch
+  // timeout (GIT_CLEANUP_FETCH_TIMEOUT_MS) turns a stuck API call into an
+  // honest "PR lookup failed" error entry.
+  const repo = mkRepo("acme", "slow");
+  const env = runEnv();
+  try {
+    process.env = { ...env.env, GIT_CLEANUP_FETCH_TIMEOUT_MS: "100" };
+    // A fetch that never settles — but, like the real one, honors the abort
+    // signal the timeout helper passes (a signal-ignoring stub would hang
+    // forever and prove nothing).
+    const run = stubRun((url, init) =>
+      new Promise((resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(init.signal.reason ?? new Error("aborted"))
+        );
+      })
+    );
+    let code;
+    try {
+      code = await main(["scan", "--json", "--repo", repo]);
+    } finally {
+      run.restore();
+    }
+    assert.equal(code, 0, run.err.join("\n"));
+    const doc = JSON.parse(run.out.join("\n"));
+    assert.equal(doc.repos[0].pr.source, "none");
+    assert.match(doc.repos[0].pr.error, /timeout|aborted/i);
+  } finally {
+    env.cleanup();
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("closing a PR fails loudly when the gh binary is unavailable", async () => {
+  // Regression: closePR used to treat a missing gh binary as success
+  // (!r.status on a spawn error is undefined), reporting "closed" for a PR
+  // that is still open.
+  const shim = ghShimDir();
+  const oldPath = process.env.PATH;
+  try {
+    process.env.PATH = `${shim}${delimiter}${oldPath}`;
+    await assert.rejects(
+      closePR({
+        owner: "acme",
+        repo: "x",
+        source: "gh",
+        pr: { number: 1 },
+        comment: null,
+      }),
+      PRBackendError
+    );
+  } finally {
+    process.env.PATH = oldPath;
+    rmSync(shim, { recursive: true, force: true });
   }
 });

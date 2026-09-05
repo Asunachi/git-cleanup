@@ -1,0 +1,165 @@
+# git-cleanup CI template — mirrors .github/workflows/ci.yml for GitLab.
+#
+# Copy this file to the repository root (or merge the jobs into an existing
+# .gitlab-ci.yml). It gives you:
+#
+#   1. test        — the full suite on Node 18 / 20 / 22, with the deep
+#                    50,000-shape parity sweep (FUZZ_CASES), exactly like
+#                    the GitHub CI matrix
+#   2. cli-smoke   — the shipped binary runs (--version, --help) and fails
+#                    cleanly on a missing path
+#   3. playground-fresh — the committed playground bundle must match
+#                    `npm run sync:playground` output
+#   4. deep-sweep  — scheduled pipelines re-sweep the fuzz seed space
+#                    (FUZZ_SEED = pipeline IID), mirroring the GitHub
+#                    nightly job
+#   5. scan        — scheduled branch-hygiene report: runs
+#                    `git-cleanup scan --check` against this repository and
+#                    FAILS the pipeline when branches are prunable, so a
+#                    stale-branch build-up is visible on the pipeline page
+#                    (GitLab has no Action marketplace, so the CLI itself is
+#                    the report channel). Optionally manual via the play
+#                    button.
+#   6. report-issue — scheduled issue report: renders the scan as markdown
+#                    with the SAME renderer the GitHub action uses and keeps
+#                    one issue titled "git-cleanup: branch report" current
+#                    via the Issues API (create or update) — the same
+#                    `git-cleanup report-issue` command works for any forge,
+#                    authenticated with GITLAB_TOKEN (a masked project
+#                    access token with `api` scope; validated: GitLab does
+#                    not grant CI/CD job tokens Issues API write access by
+#                    default, so CI_JOB_TOKEN only works after configuring
+#                    Settings → CI/CD → Job token permissions).
+#
+# Notes:
+#   - Shared GitLab runners are Linux; add `tags: [windows, macos]` matrix
+#     cells if you have self-hosted runners to mirror the GitHub OS matrix.
+#   - Set up the schedule under CI/CD → Schedules (any cron, e.g.
+#     "23 3 * * *"); scheduled pipelines run on the default branch.
+#   - GIT_DEPTH: 0 gives merge detection full history (same reason the
+#     GitHub Action unshallows CI checkouts).
+#   - Optional PR enrichment for the scan job: create a project access
+#     token (read_api) and set the GITLAB_TOKEN CI/CD variable (masked).
+
+variables:
+  FUZZ_CASES: "50000"   # deep parity sweep on every pipeline (mirrors GitHub CI)
+  GIT_DEPTH: 0          # full history: ancestor + squash/rebase detection
+  GIT_CLEANUP_NO_COLOR: "1"
+
+stages:
+  - test
+  - freshness
+  - scan
+
+# ---- 1. test matrix: Node 18 / 20 / 22 --------------------------------------
+
+test:
+  stage: test
+  image: $NODE_IMAGE
+  parallel:
+    matrix:
+      - NODE_IMAGE: ["node:18", "node:20", "node:22"]
+  interruptible: true
+  script:
+    - npm test
+
+# ---- 2. CLI smoke: the binary behaves on a fresh clone ----------------------
+
+cli-smoke:
+  stage: test
+  image: node:22
+  interruptible: true
+  script:
+    - node bin/git-cleanup.mjs --version
+    - node bin/git-cleanup.mjs --help >/dev/null
+    - |
+      # Scanning a missing path must fail cleanly (exit 1).
+      if node bin/git-cleanup.mjs scan --repo /nonexistent >/dev/null 2>&1; then
+        echo "expected scan to fail on a missing repo" >&2
+        exit 1
+      fi
+
+# ---- 3. playground bundle freshness -----------------------------------------
+
+playground-fresh:
+  stage: freshness
+  image: node:22
+  script:
+    - npm run sync:playground
+    - |
+      if ! git diff --exit-code --quiet -- index.html; then
+        echo "::error::index.html is out of sync with src/engine.mjs — run 'npm run sync:playground' and commit the result."
+        git diff --stat -- index.html
+        exit 1
+      fi
+      echo "playground bundle is in sync with src/engine.mjs"
+
+# ---- 4. nightly deep sweep (schedule pipelines only) -------------------------
+
+deep-sweep:
+  stage: test
+  image: node:22
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    # A fresh seed per scheduled pipeline sweeps new fuzz space; deterministic
+    # per run, so a failure is still reproducible.
+    - FUZZ_SEED=$CI_PIPELINE_IID npm test
+
+# ---- 5. scheduled branch-hygiene scan ----------------------------------------
+
+scan:
+  stage: scan
+  image: node:22
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
+    - when: manual
+  script:
+    - |
+      set +e
+      node bin/git-cleanup.mjs scan --check --repo "$CI_PROJECT_DIR"
+      code=$?
+      set -e
+      case $code in
+        0)
+          echo "workspace is clean"
+          ;;
+        2)
+          echo ""
+          echo "PRUNABLE BRANCHES FOUND — delete them locally with 'git-cleanup prune'"
+          echo "(or tune .gitcleanup.json thresholds if the scan is too aggressive)."
+          exit 2
+          ;;
+        *)
+          echo "scan failed ($code)"
+          exit $code
+          ;;
+      esac
+
+# ---- 6. scheduled issue report (GitLab's answer to the GitHub action) -------
+# Runs on schedules and manually. Renders the scan with the same markdown
+# renderer the GitHub scan-report action uses, then keeps one issue titled
+# "git-cleanup: branch report" current via the Issues API — the CLI's
+# report-issue command derives the forge from the cloned remote.
+# Authenticates with GITLAB_TOKEN (a masked project access token with `api`
+# scope). CI_JOB_TOKEN is a fallback only: GitLab does not grant job tokens
+# Issues API write access by default, so it needs Settings → CI/CD → Job
+# token permissions configured to work. The --dry-run line rehearses the
+# post first (same read-only search, no write): a failing rehearsal fails
+# the job, so the report issue is never silently skipped.
+
+report-issue:
+  stage: scan
+  image: node:22
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
+    - when: manual
+  script:
+    - node bin/git-cleanup.mjs scan --json --repo "$CI_PROJECT_DIR" > scan.json
+    - node .github/actions/scan-report/report.mjs scan.json report.md
+    # Quoted: `: ` inside the title would otherwise split the YAML plain
+    # scalar into a mapping and GitLab would reject the script.
+    - 'node bin/git-cleanup.mjs report-issue report.md --repo "$CI_PROJECT_DIR" --title "git-cleanup: branch report" --dry-run'
+    - 'node bin/git-cleanup.mjs report-issue report.md --repo "$CI_PROJECT_DIR" --title "git-cleanup: branch report"'

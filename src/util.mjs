@@ -4,6 +4,9 @@
 
 export { globToRegExp, matchesAny } from "./engine.mjs";
 
+/** Error for forge problems (unknown forge, missing token, API failure). */
+export class ForgeError extends Error {}
+
 const DAY_SECONDS = 24 * 60 * 60;
 
 /** Whole days between two unix timestamps (>= 0). */
@@ -19,8 +22,31 @@ export function daysFromNowIso(iso, now = new Date()) {
   return Math.max(0, Math.floor((now.getTime() - t) / (DAY_SECONDS * 1000)));
 }
 
-export function isoFromUnix(unix) {
-  return new Date(unix * 1000).toISOString();
+// Forge API calls must never hang the caller indefinitely (a shell hook, a
+// cron job, a CI step) on a dead network: every provider fetch goes through
+// this helper, which aborts after GIT_CLEANUP_FETCH_TIMEOUT_MS (default 15s)
+// and surfaces the abort as a normal PR lookup error. Read per call so the
+// knob also works when exported mid-session and tests can shrink it.
+export function fetchWithTimeout(url, init = {}) {
+  const ms = Number(process.env.GIT_CLEANUP_FETCH_TIMEOUT_MS || 15000);
+  return fetch(url, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(ms),
+  });
+}
+
+/**
+ * Forge API call that fails loudly with the forge's name on any non-2xx — a
+ * broken report job is never silently skipped. `label` is the human forge
+ * name used in the error ("GitHub", "GitLab", ...).
+ */
+export async function apiFetch(url, init, label) {
+  const res = await fetchWithTimeout(url, init);
+  if (!res.ok) {
+    const detail = (await res.text()).slice(0, 300);
+    throw new ForgeError(`${label} API ${res.status}: ${detail}`);
+  }
+  return res;
 }
 
 /** "2 branches" / "1 branch" style text for a count of `singular`. */
@@ -48,8 +74,6 @@ export const c = {
   red: (s) => color("31", s),
   green: (s) => color("32", s),
   yellow: (s) => color("33", s),
-  cyan: (s) => color("36", s),
-  gray: (s) => color("90", s),
   bold: (s) => color("1", s),
   dim: (s) => color("2", s),
 };

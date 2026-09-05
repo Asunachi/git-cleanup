@@ -35,10 +35,11 @@ function mkRepo(remoteUrl) {
   return dir;
 }
 
-function httpRes(body, status = 200) {
+function httpRes(body, status = 200, headers = {}) {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: { get: (name) => headers[name.toLowerCase()] ?? null },
     async text() {
       return JSON.stringify(body);
     },
@@ -109,6 +110,44 @@ test("parseGitLabRemote handles https, ssh, nested groups and self-hosted", () =
   assert.equal(p("https://gitlab.com/"), null);
   assert.equal(p(""), null);
   assert.equal(p(null), null);
+});
+
+test("parseGitLabRemote and loadPRs accept forge.hosts-claimed custom domains", async (t) => {
+  const hostMap = { "git.example.com": "gitlab" };
+  // Without the map the host is not a GitLab remote.
+  assert.equal(gitlabProvider.parseRemote("git@git.example.com:team/repo.git"), null);
+  assert.deepEqual(gitlabProvider.parseRemote("git@git.example.com:team/repo.git", hostMap), {
+    owner: "team",
+    repo: "repo",
+    host: "git.example.com",
+    apiBase: "https://git.example.com/api/v4",
+  });
+
+  const dir = mkRepo("git@git.example.com:team/repo.git");
+  t.after(() => {
+    globalThis.fetch = origFetch;
+    delete process.env.GITLAB_TOKEN;
+    rmSync(dir, { recursive: true, force: true });
+  });
+  process.env.GITLAB_TOKEN = "glpat-test";
+  globalThis.fetch = async () => httpRes([MR_OPEN]);
+
+  // Without the map the remote is unrecognized and PRs are not tracked.
+  const none = await gitlabProvider.loadPRs({ cwd: dir, remotes: ["origin"], track: true });
+  assert.equal(none.source, "none");
+  assert.match(none.error, /no GitLab remote found/);
+
+  // With the map: detected, parsed, and read through the API.
+  const res = await gitlabProvider.loadPRs({ cwd: dir, remotes: ["origin"], track: true, hostMap });
+  assert.equal(res.provider, "gitlab");
+  assert.equal(res.source, "api");
+  assert.deepEqual(res.repo, {
+    owner: "team",
+    repo: "repo",
+    host: "git.example.com",
+    apiBase: "https://git.example.com/api/v4",
+  });
+  assert.equal(res.prs.get("feature/a").length, 1);
 });
 
 test("gitlab provider is registered and detectable", () => {
@@ -184,6 +223,54 @@ test("loadPRs degrades without a token, and reports API failures", async (t) => 
   const failed = await gitlabProvider.loadPRs({ cwd: dir, remotes: ["origin"], track: true });
   assert.equal(failed.source, "none");
   assert.match(failed.error, /PR lookup failed: GitLab API 403/);
+});
+
+test("loadPRs reports truncated when the API keeps advertising a next page past the cap", async (t) => {
+  const dir = mkRepo("https://gitlab.com/owner/repo.git");
+  t.after(() => {
+    globalThis.fetch = origFetch;
+    delete process.env.GITLAB_TOKEN;
+    rmSync(dir, { recursive: true, force: true });
+  });
+  process.env.GITLAB_TOKEN = "glpat-test";
+
+  globalThis.fetch = async (url) => {
+    const page = /(?:^|[?&])page=(\d+)/.exec(String(url))?.[1] ?? "1";
+    if (page <= 20) {
+      const items = Array.from({ length: 100 }, (_, i) => ({
+        iid: (Number(page) - 1) * 100 + i + 1,
+        title: `mr ${page}-${i}`,
+        web_url: `https://gitlab.com/owner/repo/-/merge_requests/${(Number(page) - 1) * 100 + i + 1}`,
+        source_branch: `branch-${page}-${i}`,
+        draft: false,
+        state: "opened",
+        updated_at: new Date(Date.now() - 30 * DAY).toISOString(),
+        merged_at: null,
+      }));
+      return httpRes(items, 200, { "x-next-page": String(Number(page) + 1) });
+    }
+    return httpRes({ message: "not found" }, 404);
+  };
+
+  const res = await gitlabProvider.loadPRs({ cwd: dir, remotes: ["origin"], track: true });
+  assert.equal(res.source, "api");
+  assert.equal(res.truncated, true);
+  assert.equal(res.prs.size, 2000); // stopped at the cap, page 20
+});
+
+test("loadPRs is not truncated when pagination ends naturally", async (t) => {
+  const dir = mkRepo("https://gitlab.com/owner/repo.git");
+  t.after(() => {
+    globalThis.fetch = origFetch;
+    delete process.env.GITLAB_TOKEN;
+    rmSync(dir, { recursive: true, force: true });
+  });
+  process.env.GITLAB_TOKEN = "glpat-test";
+
+  globalThis.fetch = async () => httpRes([MR_OPEN, MR_MERGED]);
+  const res = await gitlabProvider.loadPRs({ cwd: dir, remotes: ["origin"], track: true });
+  assert.equal(res.truncated, false);
+  assert.equal(res.prs.size, 2);
 });
 
 test("forge.loadPRs routes a gitlab remote to the gitlab provider end to end", async (t) => {

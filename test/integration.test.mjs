@@ -267,6 +267,40 @@ test("backup retention sweeps old bundles during prune, keeps fresh ones", async
   }
 });
 
+test("CLI: scan --summary prints one compact line per repo", () => {
+  const f = fixture();
+  try {
+    const home = mkdtempSync(join(tmpdir(), "gc-home-"));
+    const env = { ...process.env, HOME: home, GIT_CLEANUP_NO_COLOR: "1" };
+    const r = spawnSync(
+      process.execPath,
+      [BIN, "scan", "--summary", "--no-pr", "--repo", f.work],
+      { cwd: ROOT, encoding: "utf8", env }
+    );
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const lines = r.stdout.trim().split("\n");
+    assert.equal(lines.length, 1, r.stdout);
+    // One line, all three counts, no branch table: the shell-hook shape.
+    assert.match(lines[0], /^📦 /);
+    assert.match(lines[0], /3 prunable/); // 2 local + 1 remote
+    assert.match(lines[0], /2 stale/); // wip/stale local + remote
+    assert.match(lines[0], /5 kept/);
+    assert.doesNotMatch(lines[0], /STATUS|BRANCH|PRUNE/);
+
+    // --check still wins: summary + check exits 2 when prunable exists.
+    const check = spawnSync(
+      process.execPath,
+      [BIN, "scan", "--summary", "--check", "--no-pr", "--repo", f.work],
+      { cwd: ROOT, encoding: "utf8", env }
+    );
+    assert.equal(check.status, 2, check.stdout + check.stderr);
+    assert.match(check.stdout, /3 prunable/);
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
 test("CLI: scan --json and --check exit code", () => {
   const f = fixture();
   try {
@@ -403,6 +437,28 @@ test("CLI: prune --yes --remote cleans everything", () => {
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /deleted 2 local/);
     assert.match(r.stdout, /deleted 1 remote/);
+
+    const names = listBranches(f.work, "heads").map((b) => b.name);
+    assert.ok(!names.includes("feature/merged-old"));
+    assert.ok(names.includes("release/v1"));
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
+test("CLI: prune --force is an alias for --yes (non-interactive must delete)", () => {
+  const f = fixture();
+  try {
+    const home = mkdtempSync(join(tmpdir(), "gc-home-"));
+    const env = { ...process.env, HOME: home, GIT_CLEANUP_NO_COLOR: "1" };
+    const r = spawnSync(
+      process.execPath,
+      [BIN, "prune", "--force", "--repo", f.work],
+      { cwd: ROOT, encoding: "utf8", env }
+    );
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /deleted 2 local/);
 
     const names = listBranches(f.work, "heads").map((b) => b.name);
     assert.ok(!names.includes("feature/merged-old"));

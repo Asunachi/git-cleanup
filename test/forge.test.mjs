@@ -27,9 +27,25 @@ test("detectForge classifies hosts; unknown hosts are null", () => {
   assert.equal(detectForge("https://gitlab.com/o/r"), "gitlab");
   assert.equal(detectForge("git@gitlab.example.org:o/r.git"), "gitlab"); // self-hosted
   assert.equal(detectForge("https://gitlab.company.net/o/r"), "gitlab");
-  assert.equal(detectForge("https://bitbucket.org/o/r"), null);
-  assert.equal(detectForge("https://example.com/o/r"), null);
+  assert.equal(detectForge("https://bitbucket.org/o/r"), "bitbucket");
+  assert.equal(detectForge("https://gitea.com/o/r"), "gitea");
+  assert.equal(detectForge("https://codeberg.org/o/r"), "gitea"); // Codeberg runs Gitea
+  assert.equal(detectForge("https://example.com/o/r"), null); // unrecognized host
+  assert.equal(detectForge("https://git.sr.ht/o/r"), null); // sourcehut: not claimed
   assert.equal(detectForge(""), null);
+});
+
+test("detectForge honors the forge.hosts hostMap (custom-domain self-hosted)", () => {
+  const hosts = { "git.example.com": "gitlab", "git.internal": "gitea" };
+  assert.equal(detectForge("git@git.example.com:team/repo.git", hosts), "gitlab");
+  assert.equal(detectForge("https://git.internal/team/repo.git", hosts), "gitea");
+  // Without the map the same hosts are unrecognized.
+  assert.equal(detectForge("git@git.example.com:team/repo.git"), null);
+  assert.equal(detectForge("https://git.internal/team/repo.git"), null);
+  // An explicit claim wins over the built-in heuristics.
+  assert.equal(detectForge("https://gitlab.com/o/r", { "gitlab.com": "gitea" }), "gitea");
+  // Unclaimed hosts are untouched by the map.
+  assert.equal(detectForge("https://github.com/o/r", hosts), "github");
 });
 
 test("github provider parses its remote URLs and is registered", () => {
@@ -84,7 +100,7 @@ test("providerFor returns null when no remote resolves", () => {
 test("closePR rejects unknown providers instead of guessing", async () => {
   await assert.rejects(
     () =>
-      closePR({ provider: "bitbucket", owner: "o", repo: "r", source: "api", pr: {}, comment: "" }),
-    /no forge provider for "bitbucket"/
+      closePR({ provider: "sourcehut", owner: "o", repo: "r", source: "api", pr: {}, comment: "" }),
+    /no forge provider for "sourcehut"/
   );
 });

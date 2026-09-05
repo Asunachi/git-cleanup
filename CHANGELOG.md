@@ -6,6 +6,186 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-06
+
+### Security
+
+- `prs --close` no longer reports success when the `gh` binary is missing:
+  a spawn error used to be read as "closed" (`!r.status` on `undefined`),
+  printing `✓ closed #N` for a PR that was still open. It now throws, like
+  every other `gh` failure, and the close flow surfaces it as an error.
+- The GitHub Action's report-issue search no longer caps at 100 open
+  issues: the dedup lookup paginates through 500, so the single report
+  issue can't be silently duplicated on repos with many open issues.
+
+### Fixed
+
+- PR/MR pagination is no longer silently truncated at 500 items. The
+  GitHub REST provider follows the `Link` header (GitLab: `x-next-page`)
+  up to a safety cap of 2,000 PRs, and the `gh` CLI path asks for one more
+  item than its 500-item cap to *detect* that more exist. When the cap is
+  hit, `scan --json` reports `pr.truncated: true`, the human report shows
+  a warning, and `prs` lists a warning per affected repo — branches past
+  the cap are never judged against a partial PR picture without the user
+  knowing.
+
+### Added
+
+- Shell completions for bash, zsh, and fish, shipped in the npm package
+  (`support/completions/`) and printed by the new `git-cleanup completions
+  <bash|zsh|fish>` subcommand. `--help` now documents the subcommand,
+  gives examples for every command, and lists the environment variables
+  (`GITHUB_TOKEN`, `GITLAB_TOKEN`, `GITLAB_API_BASE`, `GIT_CLEANUP_YES`,
+  `GIT_CLEANUP_NO_COLOR`).
+- A zero-dependency linter (`npm run lint`, also run inside `npm test`):
+  syntax-checks every JS file with `node --check` and enforces no tabs, no
+  trailing whitespace, and a final newline. A commit that breaks syntax or
+  formatting can no longer go green.
+- A seeded differential fuzz for merge detection: the generator builds
+  random real repositories (merge / squash / revert / no-op / divergent
+  histories against a bare origin) and requires the analyzer's verdicts to
+  match each branch's true fate. `MERGE_FUZZ_CASES` and `MERGE_FUZZ_SEED`
+  scale and reseed it (default 15 cases, fixed seed).
+- Homebrew readiness: the repo is now a tap (`brew tap
+  Asunachi/git-cleanup && brew install git-cleanup`) via
+  `Formula/git-cleanup.rb`, pinned to the published npm tarball with its
+  real sha256; the release flow in CONTRIBUTING documents updating it.
+- Repository metadata for contributors and adopters: `SECURITY.md`
+  (supported versions, private reporting, the tool's trust model),
+  `CODE_OF_CONDUCT.md`, GitHub issue forms (bug + feature), a PR
+  template, and GitHub Discussions templates (`general`, `q-a`, `ideas`,
+  `show-and-tell`).
+- `globToRegExp` now memoizes compiled regexes (identical behavior, less
+  repeated parsing when many branches share patterns).
+- Bitbucket provider: pull requests are read over the Bitbucket Cloud REST
+  API (`BITBUCKET_TOKEN` app password, `Bearer` auth), keyed by source
+  branch; `OPEN`/`MERGED`/`DECLINED`/`SUPERSEDED` states map onto the
+  shared PR shape (declined/superseded count as closed-without-merge, the
+  abandoned-PR signal), pagination follows the API's embedded `next` URL
+  with the same 2,000-item truncation cap, and `prs --close` declines the
+  PR with an optional comment. Remotes are detected by host
+  (`bitbucket.org` only — Bitbucket Server's different API is not
+  claimed). See the README "Forge support" section.
+- Shell and git hook snippets (`support/dotfiles/`, printed by the new
+  `git-cleanup shell-hook <bash|zsh|fish|pre-commit>` subcommand and
+  shipped in the npm package): a bash/zsh/fish hook runs
+  `git-cleanup scan --summary` whenever you `cd` into a git repository
+  (once per repo per `GIT_CLEANUP_SCAN_INTERVAL`, default an hour), and a
+  sample pre-commit hook reminds — never blocks — when branches are
+  prunable. Both scan offline and only ever report. `scan --summary` is
+  the compact one-line-per-repo mode they use.
+- Forge API calls now time out: every provider fetch aborts after
+  `GIT_CLEANUP_FETCH_TIMEOUT_MS` (default 15 s) and degrades to an honest
+  `PR lookup failed` error, so a dead network can never hang a shell hook,
+  cron job, or CI step indefinitely.
+- A `.gitlab-ci.yml` template mirroring the GitHub CI: Node 18/20/22 test
+  matrix with the 50,000-shape parity sweep, CLI smoke, playground-fresh
+  gate, a scheduled seed re-sweep (`FUZZ_SEED = CI_PIPELINE_IID`), and a
+  scheduled `scan --check` job that fails the pipeline when branches are
+  prunable (GitLab has no Action marketplace, so the CLI is the report
+  channel). Structure is pinned by `test/gitlab-ci.test.mjs`; see the
+  README "GitLab CI" section.
+- CI parity is now pinned both ways: `test/ci-parity.test.mjs` structurally
+  checks `.github/workflows/ci.yml` (the same way `test/gitlab-ci.test.mjs`
+  checks the template) and asserts the two files cannot drift apart — node
+  matrix, fuzz volume, CLI smoke, playground-fresh gate, scheduled sweep,
+  and the branch-hygiene report channel must match on both sides.
+- The GitLab template gains a scheduled `report-issue` job (GitLab's
+  answer to the GitHub scan-report action): it renders the scan with the
+  *same* markdown renderer and keeps one issue titled `git-cleanup:
+  branch report` current via the Issues API — create or update,
+  exact-title match, paginated search — through the CLI's
+  `report-issue` command (below).
+- Gitea provider: Gitea's API is GitHub-shaped, so the provider reuses
+  that dialect for `gitea.com`, `codeberg.org`, and `forgejo.org`
+  (`GITEA_TOKEN`, `Authorization: token`, API base per host or
+  `GITEA_API_BASE` override): PRs from `GET /api/v1/repos/{o}/{r}/pulls`
+  (`state=all`, `sort=recentupdate`), pagination via `Link` header with
+  `x-total-count` fallback and the shared 2,000-item truncation cap,
+  GitHub-style merge detection (`state: closed` + `merged_at`), and
+  `prs --close` via `PATCH` + issue comment. Self-hosted Gitea/Forgejo
+  domains are not claimed (no distinctive hostname); the README documents
+  this and the config-mapping roadmap. See "Forge support" in the README.
+- Issue reporting is now a CLI command: `git-cleanup report-issue
+  <report.md> [--title <title>] [--dry-run]` keeps one issue with a fixed
+  title current on *any* forge. It reads the repository's remote, picks
+  the matching provider (GitHub, GitLab, Bitbucket, Gitea — the same
+  hostname detection and tokens as PR enrichment: `GITHUB_TOKEN` /
+  `GITLAB_TOKEN` / `BITBUCKET_TOKEN` / `GITEA_TOKEN`, plus the
+  `GITHUB_API_BASE` / `GITLAB_API_BASE` / `BITBUCKET_API_BASE` /
+  `GITEA_API_BASE` and `CI_API_V4_URL` / `CI_JOB_TOKEN` overrides), and
+  creates or updates by exact-title search — GitHub via `Link`-header
+  pagination with pull requests excluded, GitLab via a title-narrowed
+  `search=` + `in=title` (so the dedup survives huge issue backlogs),
+  Bitbucket via embedded `next` pagination, Gitea GitHub-style.
+  `--dry-run` rehearses: the same read-only search runs, create-vs-update
+  is resolved, only the write is skipped. Both scheduled report jobs (the
+  GitHub workflow and the GitLab template's `report-issue`) now rehearse
+  with `--dry-run` before the real post, so every run proves the token,
+  forge detection, and exact-title search work — a failing rehearsal
+  fails the run, and the report is never silently skipped. Re-validating
+  the edited template with a real YAML parser also surfaced and fixed a
+  latent template bug: `--title "git-cleanup: branch report"` contains a
+  `: ` (colon + space), which silently splits an unquoted YAML plain
+  scalar into a mapping — the `report-issue` job's script would have been
+  rejected by real GitLab. The script lines are now quoted, and a
+  structural test guards the whole template against the `: ` trap. This
+  consolidates the former
+  `support/github/report-issue.mjs` and `support/gitlab/report-issue.mjs`
+  scripts — deleted; the scheduled GitHub workflow and the GitLab
+  template now call the command directly, so the identical invocation
+  works in GitHub Actions, GitLab CI, or any cron. The auth story was
+  validated against a real GitLab instance and GitLab's docs: CI/CD job
+  tokens cannot write the Issues API by default (GitLab 16+), so
+  `GITLAB_TOKEN` (a masked project access token with `api` scope) is the
+  documented primary auth and `CI_JOB_TOKEN` a clearly-labeled fallback;
+  the read path (pagination, `iid`/`title`/`web_url` fields,
+  update-target addressability) was verified against live data. Exported
+  from the library (`postReport`, `resolveForgeContext`,
+  `DEFAULT_TITLE`) and tested end-to-end against a stubbed API
+  (`test/report-issue.test.mjs`).
+- `git-cleanup doctor`: one diagnostic pass over the environment — git
+  and `gh` presence, every forge token (with the `CI_JOB_TOKEN` GitLab
+  fallback), config validity (including `forge.hosts` claims), and how
+  each remote of the repo at hand resolves. Missing tokens, a missing
+  `gh`, and unrecognized remotes are warnings with fix hints (a
+  copy-pasteable `forge.hosts` suggestion); a missing git or a broken
+  config are errors that exit 1. `doctor --json` emits the report as one
+  machine-readable document. Checks are pure data (`runDoctor`) with an
+  injectable spawn so tests are deterministic; the home config path is
+  resolved per call so an exported session honors a changed `HOME`.
+- `forge.hosts` config: self-hosted GitLab/Gitea instances on custom
+  domains (e.g. `git.example.com` running GitLab, a Gitea at
+  `git.internal`) can now be claimed by hostname — used by PR tracking
+  and `report-issue` alike. An explicit mapping always wins over the
+  built-in hostname heuristics; API bases derive from the host
+  (`https://<host>/api/v4` GitLab, `https://<host>/api/v1` Gitea) with
+  the env overrides (`GITLAB_API_BASE` / `CI_API_V4_URL`,
+  `GITEA_API_BASE`) still honored. Unknown forge ids in the map are a
+  loud config error. `report-issue` now reads config (for this key);
+  detection/parsing takes the map through `detectForge`,
+  `providerFor`, `loadPRs`, and the providers' `issues.context`.
+  Claiming a host as `github` or `bitbucket` stays possible but their
+  parsers only claim `github.com`/`bitbucket.org`, so such claims
+  degrade loudly rather than guessing (GitHub Enterprise and Bitbucket
+  Server remain unclaimed).
+- `backup list` and `backup restore`: the bundle backups behind `-D`
+  deletions are now queryable and restorable by name. `backup list`
+  prints every bundle (name, date, size, branches it holds, and whether
+  the retention sweep would remove it) with the backup dir; `backup
+  restore NAME` resolves a bundle by basename (or an explicit path) and
+  fetches back every branch ref it holds that does **not** already
+  exist locally — exact refspecs, no force, so a restore can never
+  clobber current work, and branches that exist are skipped with a
+  note. It confirms first (`--yes` for scripts); a missing name is a
+  loud error that lists what's available. `backup list --json` prints
+  the whole inventory for automation. Restoring is just `git fetch`
+  under the hood, so a restored branch can be deleted again with plain
+  git. The backup location comes from `backup.dir` config (default the
+  repo's `.git/git-cleanup-backups`), and the non-interactive
+  confirmation error now says "nothing was restored" instead of the
+  prune wording.
+
 ### Changed
 
 - The parity fuzz is volume-configurable and CI sweeps it deep: the test
@@ -15,6 +195,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `workflow_dispatch` re-sweep the seed space on days without pushes. The
   coverage assertions scale with the volume, so the sweep can't go
   vacuously green at any depth.
+- README: badges (CI, npm, license, Node), a table of contents, a
+  comparison table against other branch cleaners (built-in git, git-sweep,
+  git-delete-merged-branches, git-extras, git-clean-gone, GitHub's
+  auto-delete setting), and a package-manager table including Homebrew.
+- Dead code removed: `gitOk`, `remoteBranchExists`, `isRefProtected`,
+  `isoFromUnix`, and the unused `c.cyan`/`c.gray` color helpers.
+- The forge provider contract now includes an `issues` capability (context
+  resolution, find/create/update, preview URL) implemented by each provider
+  in `src/providers/` — GitHub, GitLab, Bitbucket, Gitea. `report-issue`
+  became a thin generic loop over that contract (down from ~310 to ~90
+  lines), removing its six per-forge case analyses: all forge-specific
+  knowledge (tokens, endpoints, pagination dialects, field names, write
+  bodies) lives in the provider, so adding a forge is literally "implement
+  the contract in a new provider module and register it", for PR tracking
+  and report posting alike. `ForgeError` moved to `util.mjs` so providers
+  can throw it without an import cycle; `resolveForgeContext` and
+  `postReport` behave identically (all 23 behavior tests pass unchanged),
+  and a new contract test pins the capability on every registered provider.
+- `prune` accepts `--force` as an alias for `--yes` — the word users
+  naturally try first (the safety gate is unchanged: it still only skips
+  the interactive confirmation, exactly like `--yes`). Completions and
+  `--help` updated; regression test added.
 
 ## [0.2.8] - 2026-09-05
 

@@ -80,6 +80,13 @@ export function printRepoReport(repo, cfg, opts = {}) {
         `PRs via ${repo.pr.source}: ${repo.pr.repo.owner}/${repo.pr.repo.repo}`
       )
     );
+    if (repo.pr.truncated) {
+      out.push(
+        c.yellow(
+          `  ⚠ PR data truncated (fetch cap) — very old branches may be under-reported`
+        )
+      );
+    }
   }
 
   if (rows.length === 0) {
@@ -166,6 +173,9 @@ export function reposToJSON(repos, cfg) {
             source: r.pr.source,
             repo: r.pr.repo,
             error: r.pr.error || undefined,
+            // true when the forge's PR list hit the fetch cap: branches past
+            // it are judged without PR evidence.
+            truncated: r.pr.truncated || undefined,
           }
         : undefined,
       branches: (r.branches ?? []).map((b) => ({

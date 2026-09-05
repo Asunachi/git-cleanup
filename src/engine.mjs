@@ -22,6 +22,12 @@ function escapeChar(ch) {
   return ch.replace(ESCAPE_RE, "\\$&");
 }
 
+// Compiled glob cache: classification compiles the same patterns (protected
+// list, rules) once per branch, so memoizing the regexes avoids re-parsing
+// them for every branch of every repo. Purely functional — the page and the
+// CLI share this behavior.
+const globCache = new Map();
+
 /**
  * Convert a git-style glob into an anchored RegExp.
  * Supported wildcards:
@@ -33,6 +39,8 @@ function escapeChar(ch) {
  * prefix) is optional, so that pattern also matches the bare name on its own.
  */
 export function globToRegExp(glob) {
+  let re = globCache.get(glob);
+  if (re) return re;
   let source = "";
   for (let i = 0; i < glob.length; ) {
     const ch = glob[i];
@@ -57,7 +65,9 @@ export function globToRegExp(glob) {
       i += 1;
     }
   }
-  return new RegExp(`^${source}$`);
+  re = new RegExp(`^${source}$`);
+  globCache.set(glob, re);
+  return re;
 }
 
 /** True when `name` matches any glob in `patterns`. */

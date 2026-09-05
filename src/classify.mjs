@@ -54,6 +54,13 @@ export function defaults() {
       // (0 = keep backups forever)
       retainDays: 0,
     },
+    forge: {
+      // Claim hostnames for self-hosted forges that the built-in hostname
+      // heuristics cannot recognize: { "git.example.com": "gitlab",
+      // "git.internal": "gitea" }. An explicit mapping always wins over
+      // the built-in heuristics. Used by PR tracking and report-issue alike.
+      hosts: {},
+    },
     repos: [],
   };
 }

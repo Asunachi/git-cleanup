@@ -1,6 +1,6 @@
 {
   "name": "@maliqkara/gitcleanup",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "publishConfig": { "access": "public" },
   "description": "Scan local and remote Git branches, cross-reference PR merge status, and safely prune stale/merged branches.",
   "license": "MIT",
@@ -10,6 +10,9 @@
     "type": "git",
     "url": "git+https://github.com/Asunachi/git-cleanup.git"
   },
+  "bugs": {
+    "url": "https://github.com/Asunachi/git-cleanup/issues"
+  },
   "type": "module",
   "bin": {
     "git-cleanup": "./bin/git-cleanup.mjs"
@@ -17,12 +20,13 @@
   "exports": {
     ".": "./src/index.mjs"
   },
-  "files": ["bin", "src", "README.md", "LICENSE", "CHANGELOG.md"],
+  "files": ["bin", "src", "support/completions", "support/dotfiles", "README.md", "LICENSE", "CHANGELOG.md"],
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
     "test": "node --test",
+    "lint": "node scripts/lint.mjs",
     "sync:playground": "node scripts/sync-playground.mjs",
     "prepublishOnly": "npm test"
   },
@@ -33,6 +37,9 @@
     "prune",
     "pull-request",
     "stale",
-    "cli"
+    "cli",
+    "github",
+    "gitlab",
+    "bitbucket"
   ]
 }

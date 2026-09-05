@@ -3,7 +3,7 @@
 
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { daysBetween, isoFromUnix } from "./util.mjs";
+import { daysBetween } from "./util.mjs";
 
 export class GitError extends Error {}
 
@@ -24,10 +24,6 @@ export function git(args, opts = {}) {
     out: (res.stdout ?? "").trim(),
     err: (res.stderr ?? "").trim(),
   };
-}
-
-export function gitOk(args, opts) {
-  return git(args, opts).ok;
 }
 
 /** Resolve a ref to its SHA, or null if the ref does not exist. */
@@ -228,13 +224,4 @@ export function upstreamOf(cwd, name) {
   );
   if (!r.ok) return null; // no upstream configured
   return r.out;
-}
-
-export function remoteBranchExists(remoteRefs, name) {
-  return remoteRefs.some((b) => b.name === name);
-}
-
-/** True when the branch name is a ref that should never be touched. */
-export function isRefProtected(name) {
-  return name === "HEAD" || name.endsWith("/HEAD");
 }
