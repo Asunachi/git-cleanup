@@ -97,7 +97,7 @@ two-line glob before you point it at your remote.
   have been silent for months.
 - **GitHub and GitLab** PR state cross-reference (`gh`, `GITHUB_TOKEN`, or
   `GITLAB_TOKEN`), degrading gracefully to pure-Git detection offline.
-- **Zero dependencies.** Node ≥ 18, the `git` binary, and nothing else. 68
+- **Zero dependencies.** Node ≥ 18, the `git` binary, and nothing else. 69
   tests, green on Linux, macOS, and Windows — including worktree, empty-repo,
   and cross-platform path edge cases.
 

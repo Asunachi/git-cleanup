@@ -333,12 +333,223 @@ test("page bundle vs engine: classifyRemote agrees", () => {
     cfg({ remote: { pruneMerged: false, deleteAbandonedAfterDays: 0 } }),
     cfg({ remote: { pruneMerged: true, deleteAbandonedAfterDays: 60 } }),
     cfg({ deleteMergedAfterDays: 0, remote: { pruneMerged: true, deleteAbandonedAfterDays: 30 } }),
-  ];
-  for (const c of configs) {
+  ];  for (const c of configs) {
     for (const b of branches) {
       check(`classifyRemote(${b.name}, ${JSON.stringify(c.remote)})`, () => {
         assert.deepEqual(page.classifyRemote(b, c), classifyRemote(b, c));
       });
     }
   }
+});
+
+// ---- seeded property test ------------------------------------------------
+// Hand-picked cases above can miss the combination that breaks parity. This
+// throws hundreds of random branch x config x context shapes at BOTH the
+// page's bundled engine and the real one and requires byte-identical
+// verdicts. Deterministic: a fixed seed means a failure is reproducible.
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const pick = (rnd, arr) => arr[Math.floor(rnd() * arr.length)];
+
+const FUZZ_NAME_PARTS = [
+  "feature/x",
+  "feature/a-b",
+  "feature/x/y",
+  "feature/a_b.c",
+  "docs/#ticket-7",
+  "tmp/scratch",
+  "tmp-1",
+  "wip/abandoned",
+  "wip/idea",
+  "release/v1",
+  "release/v1/hotfix",
+  "hotfix/1.2.3",
+  "bugfix/issue_9",
+  "experiment/fancy-name",
+  "JIRA-123",
+  "feature/slow-wip",
+  "main",
+  "master",
+  "dev",
+  "develop",
+  "staging",
+  "qa",
+  "trunk",
+  "docs",
+  "HEAD",
+  "keep-local",
+  "x",
+];
+
+const FUZZ_RULE_GLOBS = [
+  "tmp/*",
+  "tmp/**",
+  "feature/*",
+  "feature/**",
+  "feature/slow-*",
+  "wip/**",
+  "release/**",
+  "docs/*",
+  "**/idea",
+  "*.1",
+  "JIRA-*",
+  "experiment/**",
+  "keep-*",
+];
+
+function randBranch(rnd, i) {
+  const type = rnd() < 0.35 ? "remote" : "local";
+  const short = pick(rnd, FUZZ_NAME_PARTS);
+  const name = type === "remote" ? "origin/" + short : short;
+  const r = rnd();
+  const merged = r < 0.3;
+  const contentMerged = r >= 0.3 && r < 0.5;
+  const isHead =
+    type === "local" &&
+    (short === "main" || short === "master") &&
+    rnd() < 0.6;
+  return {
+    name,
+    // Mirror analyze.mjs: locals carry their own name as shortName; remotes
+    // carry the name minus the remote prefix. Occasionally omit shortName
+    // entirely to exercise the classify() fallback on both sides.
+    ...(rnd() < 0.85 ? { shortName: type === "remote" ? short : name } : {}),
+    type,
+    ageDays: Math.floor(rnd() * 220),
+    merged,
+    contentMerged,
+    isHead,
+    pr:
+      rnd() < 0.45
+        ? {
+            state: pick(rnd, ["open", "closed", "merged"]),
+            ageDays: Math.floor(rnd() * 150),
+            number: i,
+          }
+        : null,
+  };
+}
+
+function randConfig(rnd) {
+  const rules = [];
+  if (rnd() < 0.55) {
+    const n = 1 + Math.floor(rnd() * 3);
+    for (let k = 0; k < n; k++) {
+      const rule = {
+        match: pick(rnd, FUZZ_RULE_GLOBS),
+        mode: pick(rnd, ["merged", "any"]),
+      };
+      if (rnd() < 0.5) rule.minAgeDays = Math.floor(rnd() * 120);
+      rules.push(rule);
+    }
+  }
+  const protectedList = [];
+  if (rnd() < 0.4) {
+    protectedList.push(
+      ...new Set([pick(rnd, FUZZ_NAME_PARTS), pick(rnd, FUZZ_RULE_GLOBS)])
+    );
+  }
+  return {
+    protected: protectedList,
+    deleteMergedAfterDays: Math.floor(rnd() * 90),
+    warnUnmergedAfterDays: Math.floor(rnd() * 200),
+    rules,
+    pr: { track: true },
+    remote: {
+      pruneMerged: rnd() < 0.7,
+      deleteAbandonedAfterDays: rnd() < 0.5 ? 0 : Math.floor(rnd() * 200) + 1,
+    },
+  };
+}
+
+const BASE_REF_POOL = [
+  ["origin/main"],
+  ["origin/main", "origin/dev"],
+  ["origin/main", "main"],
+  ["main"],
+  ["origin/main", "origin/develop", "release"],
+];
+
+function randCtx(rnd, branch) {
+  const baseRefs = pick(rnd, BASE_REF_POOL);
+  return {
+    isHead: branch.type === "remote" ? false : branch.isHead,
+    baseNames: new Set(baseRefs),
+    baseShort: new Set(baseRefs.map((b) => b.split("/").pop())),
+  };
+}
+
+test("fuzz: page bundle and engine agree on 2000 random branch x config x ctx shapes", () => {
+  const rnd = mulberry32(0x6c7e2d);
+  const verdicts = { delete: 0, warn: 0, keep: 0 };
+  const reasons = new Set();
+  let remotes = 0;
+  let rulesSeen = 0;
+  let protectedSeen = 0;
+
+  for (let i = 0; i < 2000; i++) {
+    const branch = randBranch(rnd, i);
+    const cfg = randConfig(rnd);
+    const ctx = randCtx(rnd, branch);
+    if (branch.type === "remote") remotes++;
+    if (cfg.rules.length > 0) rulesSeen++;
+
+    check(`fuzz case ${i} (${branch.name}, merged=${branch.merged}, contentMerged=${branch.contentMerged}, age=${branch.ageDays}, rules=${cfg.rules.length})`, () => {
+      // The full layering and each raw gate must agree byte-for-byte.
+      const pb = page.classifyBranch(branch, cfg, ctx);
+      assert.deepEqual(pb, classifyBranch(branch, cfg, ctx));
+      assert.deepEqual(
+        page.classify(branch, cfg, ctx),
+        classify(branch, cfg, ctx)
+      );
+      assert.deepEqual(
+        page.classifyRemote(branch, cfg),
+        classifyRemote(branch, cfg)
+      );
+
+      // Structural sanity that must hold no matter the inputs.
+      assert.ok(["delete", "warn", "keep"].includes(pb.verdict), pb.verdict);
+      assert.ok(typeof pb.reason === "string" && pb.reason.length > 0);
+
+      verdicts[pb.verdict]++;
+      reasons.add(pb.reason);
+      if (pb.reason === "protected" || pb.reason === "head") protectedSeen++;
+
+      // Deterministic: classifying the same shape twice gives the same answer.
+      assert.deepEqual(pb, page.classifyBranch(branch, cfg, ctx));
+
+      // Glob behavior parity for the rules in play.
+      for (const rule of cfg.rules) {
+        assert.equal(
+          page.globToRegExp(rule.match).source,
+          globToRegExp(rule.match).source
+        );
+        assert.equal(
+          page.matchesAny([rule.match], branch.shortName ?? branch.name),
+          matchesAny([rule.match], branch.shortName ?? branch.name)
+        );
+      }
+    });
+  }
+
+  // The generator must actually have exercised the space, or the test is
+  // vacuously green: every verdict, a spread of reasons, remotes, rules,
+  // and protected branches all seen.
+  assert.ok(verdicts.delete > 50, `delete verdicts: ${verdicts.delete}`);
+  assert.ok(verdicts.warn > 50, `warn verdicts: ${verdicts.warn}`);
+  assert.ok(verdicts.keep > 100, `keep verdicts: ${verdicts.keep}`);
+  assert.ok(reasons.size > 10, `reason variety: ${reasons.size}`);
+  assert.ok(remotes > 200, `remote branches: ${remotes}`);
+  assert.ok(rulesSeen > 400, `cases with rules: ${rulesSeen}`);
+  assert.ok(protectedSeen > 50, `protected/head outcomes: ${protectedSeen}`);
 });

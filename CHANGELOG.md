@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `src/engine.mjs` without re-bundling it into `index.html` can never land.
   (The parity tests already caught behavioral drift; this catches the
   un-committed sync itself.)
+- The parity suite is now property-tested: a seeded fuzzer (fixed seed, so
+  any failure reproduces) throws 2,000 random branch × config × base-context
+  shapes at both the page's bundled engine and the real one and requires
+  byte-identical verdicts from `classify`, `classifyRemote`, and
+  `classifyBranch`, plus structural invariants and coverage assertions that
+  stop the generator from going vacuously green. Verified to catch drift the
+  hand-picked cases miss: flipping a single `>=` to `>` in the bundled copy
+  fails the fuzz while every hand-picked parity case still passes.
 
 ## [0.2.7] - 2026-09-05
 
