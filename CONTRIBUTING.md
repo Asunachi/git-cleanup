@@ -81,8 +81,9 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
 1. Bump the version in `package.json` (semver), move the matching
    `[Unreleased]` content in `CHANGELOG.md` into a dated release entry, and
    update every GitHub Action pin to the new tag: the README example
-   (`scan-report@vX.Y.Z`) and `docs/launch-post.md` if it shows one. The
-   pins must land in the release tree so the tag itself carries them.
+   (`scan-report@vX.Y.Z`), `docs/launch-post.md`, and `docs/marketplace.md`
+   wherever they show one. The pins must land in the release tree so the
+   tag itself carries them.
 2. Run `npm publish --dry-run` first: the `files` field keeps the tarball to
    `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
    before anything goes out.
