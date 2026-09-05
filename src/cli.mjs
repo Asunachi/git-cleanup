@@ -264,12 +264,19 @@ async function cmdPrs(results, cfg, opts) {
       }
     }
     for (const r of unusable) {
-      if (r.pr?.repo && r.pr?.error) {
+      // An error here means PR state could not be loaded at all — say so
+      // even when there is no forge remote to attach the message to, so
+      // "no stale PRs found" below is never mistaken for a real check.
+      if (r.pr?.error) {
         console.error(c.yellow(`  ${r.path}: ${r.pr.error}`));
       }
     }
     if (!found) {
-      console.log("\n  no stale open PRs found");
+      if (usable.length === 0) {
+        console.log("\n  no PR source available — nothing to list (add a GitHub/GitLab remote or set a token)");
+      } else {
+        console.log("\n  no stale open PRs found");
+      }
       return done(0);
     }
     if (!opts.close) return done(0);
