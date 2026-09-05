@@ -4,10 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.7] - 2026-09-05
 
 ### Fixed
 
+- `--repo --json` (or `--config --json`) no longer silently swallows the
+  following flag as the value: a value that is missing or starts with `-`
+  now errors with `missing value for --repo/--config` instead of treating
+  `--json` as a repo path.
 - When `git push --delete` fails because the branch was already deleted on
   the server (web UI, another machine, an earlier run), `prune --remote` now
   prunes the stale local tracking ref instead of reporting a dead-end error.
@@ -16,15 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auth/network failures and refs that still exist (e.g. protected branches)
   keep surfacing as real errors. The summary reports these as
   `pruned N stale remote refs`.
+- The playground no longer disagrees with the CLI about protected remote
+  branches: its gate-first layering would have PRUNED a protected remote
+  like `origin/release/v1`, which `analyze.mjs` correctly keeps. The demo
+  and the analyzer now share one implementation (see below), and the
+  simulated repo includes that branch as a regression fixture.
+- The test suite's reported size is now the true count on every Node
+  version: `test/helpers.mjs` moved to `support/helpers.mjs` so Node's test
+  runner no longer counts the fixture file itself as a passing test.
 
 ### Added
 
-- Cross-platform stress tests for the `-d` fallback: the worktree-refusal
-  case now also runs with a worktree path containing spaces (the quoting
-  hazard that behaves differently on Windows vs POSIX), asserting the
-  refusal names the exact path with separators normalized, and the refusal
-  matcher accepts both git phrasings (`used by worktree at` / `checked out
-  at`) so it holds across git versions on the CI OS matrix.
 - The decision engine moved to a single source of truth (`src/engine.mjs`,
   dependency-free): `src/classify.mjs` and `src/util.mjs` re-export it, and
   the playground page bundles it verbatim via
@@ -35,27 +41,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   badge to the actual suite size so the demo can't lie about coverage
   again. A reset button returns the playground to its default thresholds.
 - The per-branch verdict layering itself (classify first, remote gate
-  second) is now shared too: `analyze.mjs` and the playground both call
-  `classifyBranch()` from the engine, so the demo's view of a branch can
-  never differ from the CLI's. That unification fixed a real demo bug — the
-  playground's old gate-first layering would have PRUNED a protected remote
-  like `origin/release/v1`, which the CLI correctly keeps. The simulated
-  repo gained that branch (plus remote `shortName` handling matching
-  analyze), and the parity test now evals the page's fixture and compares
-  every simulated branch against the real layering across six
-  threshold/toggle scenarios, pins the demo's canonical verdict table, and
-  locks the layer corners (protected remotes, remote-disabled, abandoned
-  remotes, force rules never touching remotes).
-
-### Fixed
-
-- `--repo --json` (or `--config --json`) no longer silently swallows the
-  following flag as the value: a value that is missing or starts with `-`
-  now errors with `missing value for --repo/--config` instead of treating
-  `--json` as a repo path.
-- The test suite's reported size is now the true count on every Node
-  version: `test/helpers.mjs` moved to `support/helpers.mjs` so Node's test
-  runner no longer counts the fixture file itself as a passing test.
+  second, protection always wins) is now shared too: `analyze.mjs` and the
+  playground both call `classifyBranch()` from the engine, so the demo's
+  view of a branch can never differ from the CLI's. The simulated repo
+  gained remote `shortName` handling matching analyze, and the parity test
+  now evals the page's fixture and compares every simulated branch against
+  the real layering across six threshold/toggle scenarios, pins the demo's
+  canonical verdict table, and locks the layer corners (protected remotes,
+  remote-disabled, abandoned remotes, force rules never touching remotes).
+- Cross-platform stress tests for the `-d` fallback: the worktree-refusal
+  case now also runs with a worktree path containing spaces (the quoting
+  hazard that behaves differently on Windows vs POSIX), asserting the
+  refusal names the exact path with separators normalized, and the refusal
+  matcher accepts both git phrasings (`used by worktree at` / `checked out
+  at`) so it holds across git versions on the CI OS matrix.
 
 ## [0.2.6] - 2026-09-05
 
