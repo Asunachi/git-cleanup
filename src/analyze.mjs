@@ -12,7 +12,7 @@ import {
   treeIndexForBaseRefs,
   upstreamOf,
 } from "./git.mjs";
-import { classify, classifyRemote, VERDICTS } from "./classify.mjs";
+import { classifyBranch } from "./classify.mjs";
 import { bestPR, loadPRs } from "./forge.mjs";
 import { daysBetween } from "./util.mjs";
 
@@ -104,7 +104,7 @@ export async function analyzeRepo(repoPath, cfg) {
       upstream,
       pr: pr.source !== "none" ? bestPR(pr.prs, b.name) ?? null : null,
     };
-    const d = classify(branch, cfg, {
+    const d = classifyBranch(branch, cfg, {
       isHead: branch.isHead,
       baseNames: new Set(baseRefs),
       baseShort,
@@ -137,30 +137,14 @@ export async function analyzeRepo(repoPath, cfg) {
       upstream: null,
       pr: pr.source !== "none" ? bestPR(pr.prs, short) ?? null : null,
     };
-    // Protection/keep decisions from the generic classifier always win.
-    const c = classify(branch, cfg, {
+    const d = classifyBranch(branch, cfg, {
       isHead: false,
       baseNames: new Set(baseRefs),
       baseShort,
     });
-    if (c.verdict === VERDICTS.KEEP) {
-      branch.verdict = VERDICTS.KEEP;
-      branch.reason = c.reason;
-    } else {
-      const gate = classifyRemote(branch, cfg);
-      if (gate && gate.verdict === VERDICTS.DELETE) {
-        branch.verdict = VERDICTS.DELETE;
-        branch.reason = gate.reason;
-      } else if (c.verdict === VERDICTS.DELETE) {
-        // Git says merged and old, but remote cleanup is switched off:
-        // surface it as informational only.
-        branch.verdict = VERDICTS.WARN;
-        branch.reason = "remote-disabled";
-      } else {
-        branch.verdict = c.verdict;
-        branch.reason = c.reason;
-      }
-    }
+    branch.verdict = d.verdict;
+    branch.reason = d.reason;
+    branch.rule = d.rule;
     branches.push(branch);
   }
 

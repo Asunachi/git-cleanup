@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and fails CI if they diverge — and it also pins the page's "N tests"
   badge to the actual suite size so the demo can't lie about coverage
   again. A reset button returns the playground to its default thresholds.
+- The per-branch verdict layering itself (classify first, remote gate
+  second) is now shared too: `analyze.mjs` and the playground both call
+  `classifyBranch()` from the engine, so the demo's view of a branch can
+  never differ from the CLI's. That unification fixed a real demo bug — the
+  playground's old gate-first layering would have PRUNED a protected remote
+  like `origin/release/v1`, which the CLI correctly keeps. The simulated
+  repo gained that branch (plus remote `shortName` handling matching
+  analyze), and the parity test now evals the page's fixture and compares
+  every simulated branch against the real layering across six
+  threshold/toggle scenarios, pins the demo's canonical verdict table, and
+  locks the layer corners (protected remotes, remote-disabled, abandoned
+  remotes, force rules never touching remotes).
 
 ### Fixed
 

@@ -1,6 +1,12 @@
 // Public API for embedding git-cleanup in other tooling.
 export { analyzeRepo } from "./analyze.mjs";
-export { classify, classifyRemote, defaults, VERDICTS } from "./classify.mjs";
+export {
+  classify,
+  classifyBranch,
+  classifyRemote,
+  defaults,
+  VERDICTS,
+} from "./classify.mjs";
 export { loadConfig, normalizeConfig } from "./config.mjs";
 export {
   bestPR,

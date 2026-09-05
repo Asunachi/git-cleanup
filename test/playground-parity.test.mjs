@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   classify,
+  classifyBranch,
   classifyRemote,
   globToRegExp,
   matchesAny,
@@ -30,8 +31,26 @@ assert.ok(
 // The bundle is plain top-level declarations (no `export`), so `new Function`
 // can return them directly.
 const bundledCode = html.slice(s + START.length, e);
+
+// The fixture region holds the demo's pure data + shaping (no DOM). Eval it
+// alongside the engine so the tests can run the page's exact pipeline.
+const FS = "/* __FIXTURE_START__ */";
+const FE = "/* __FIXTURE_END__ */";
+const fs = html.indexOf(FS);
+const fe = html.indexOf(FE);
+assert.ok(
+  fs >= 0 && fe > fs,
+  "index.html is missing the __FIXTURE__ markers around makeRepo/shaping"
+);
+const fixtureCode = html.slice(fs + FS.length, fe);
+
 const page = new Function(
-  bundledCode + "\nreturn { globToRegExp, matchesAny, classify, classifyRemote };"
+  bundledCode +
+    "\n" +
+    fixtureCode +
+    "\nreturn { globToRegExp, matchesAny, classify, classifyBranch, " +
+    "classifyRemote, makeRepo, shapedBranch, demoConfig, RULES, " +
+    "DEFAULT_THRESHOLDS };"
 )();
 
 function cfg(over = {}) {
@@ -133,6 +152,145 @@ test("page bundle vs engine: classify agrees across the verdict space", () => {
       });
     }
   }
+});
+
+// ---- page fixture vs the real analyze layering on the same inputs ---------
+
+// Context analyze.mjs builds for the repo the fixture models: a remote origin
+// whose default branch is main => baseRefs ["origin/main"], baseShort ["main"].
+function analyzeCtx(branch) {
+  return {
+    isHead: branch.type === "remote" ? false : branch.isHead,
+    baseNames: new Set(["origin/main"]),
+    baseShort: new Set(["main"]),
+  };
+}
+
+const SCENARIOS = [
+  { label: "defaults", toggles: { squash: true, pr: true, remote: true }, thresholds: { merged: 21, warn: 45, aban: 0 } },
+  { label: "content-merge off", toggles: { squash: false, pr: true, remote: true }, thresholds: { merged: 21, warn: 45, aban: 0 } },
+  { label: "PR tracking off", toggles: { squash: true, pr: false, remote: true }, thresholds: { merged: 21, warn: 45, aban: 0 } },
+  { label: "--remote off", toggles: { squash: true, pr: true, remote: false }, thresholds: { merged: 21, warn: 45, aban: 0 } },
+  { label: "abandon after 60d", toggles: { squash: true, pr: true, remote: true }, thresholds: { merged: 21, warn: 45, aban: 60 } },
+  { label: "everything young", toggles: { squash: true, pr: true, remote: true }, thresholds: { merged: 90, warn: 180, aban: 0 } },
+];
+
+function rowOutcomes(rows, toggles, thresholds) {
+  const cfg = page.demoConfig(thresholds, toggles);
+  return rows.map((b) => {
+    const shaped = page.shapedBranch(b, toggles);
+    const ctx = analyzeCtx(shaped);
+    return {
+      name: b.name,
+      page: page.classifyBranch(shaped, cfg, ctx),
+      real: classifyBranch(shaped, cfg, ctx),
+    };
+  });
+}
+
+test("page fixture rows agree with the real analyze layering on the same inputs", () => {
+  const rows = page.makeRepo();
+  assert.equal(rows.length, 13, "fixture should cover every branch role");
+
+  for (const s of SCENARIOS) {
+    for (const r of rowOutcomes(rows, s.toggles, s.thresholds)) {
+      check(`fixture ${r.name} under ${s.label}`, () => {
+        assert.deepEqual(r.page, r.real);
+      });
+    }
+  }
+
+  // The canonical default view the page shows on load (and reset). If the
+  // engine or fixture ever changes the demo's story, this table must change
+  // with it deliberately.
+  const canonical = {
+    main: ["keep", "head"],
+    "release/v2": ["keep", "protected"],
+    "origin/release/v1": ["keep", "protected"], // protected remotes are never pruned
+    "feature/merged-old": ["delete", "merged"],
+    "origin/feature/merged-old2": ["delete", "merged"],
+    "feature/squash-landed": ["delete", "squash-merged"],
+    "origin/feature/squash-landed": ["delete", "squash-merged"],
+    "feature/slow-wip": ["keep", "unmerged-rule"],
+    "wip/abandoned": ["warn", "stale-unmerged"],
+    "origin/wip/abandoned": ["warn", "stale-unmerged"],
+    "feature/open-pr": ["keep", "open-pr"],
+    "tmp/scratch": ["delete", "rule-force"],
+    "docs/fresh": ["keep", "active"],
+  };
+  const dflt = SCENARIOS[0];
+  const counts = { delete: 0, warn: 0, keep: 0 };
+  for (const r of rowOutcomes(rows, dflt.toggles, dflt.thresholds)) {
+    assert.deepEqual([r.page.verdict, r.page.reason], canonical[r.name], r.name);
+    counts[r.page.verdict]++;
+  }
+  assert.deepEqual(counts, { delete: 5, warn: 2, keep: 6 });
+
+  // Toggle semantics the page must preserve (spot checks beyond equality).
+  const byName = (out) => Object.fromEntries(out.map((r) => [r.name, r.page]));
+
+  const off = byName(rowOutcomes(rows, SCENARIOS[3].toggles, SCENARIOS[3].thresholds));
+  assert.deepEqual([off["origin/feature/merged-old2"].verdict, off["origin/feature/merged-old2"].reason], ["warn", "remote-disabled"]);
+  assert.deepEqual([off["origin/release/v1"].verdict, off["origin/release/v1"].reason], ["keep", "protected"]);
+
+  const noPr = byName(rowOutcomes(rows, SCENARIOS[2].toggles, SCENARIOS[2].thresholds));
+  assert.equal(noPr["feature/open-pr"].reason, "active"); // PR state hidden => treated as unmerged
+
+  const aban = byName(rowOutcomes(rows, SCENARIOS[4].toggles, SCENARIOS[4].thresholds));
+  assert.deepEqual([aban["origin/wip/abandoned"].verdict, aban["origin/wip/abandoned"].reason], ["delete", "abandoned-pr"]);
+  assert.equal(aban["wip/abandoned"].verdict, "warn", "abandoned local branches are only warned");
+
+  const young = byName(rowOutcomes(rows, SCENARIOS[5].toggles, SCENARIOS[5].thresholds));
+  assert.equal(young["feature/merged-old"].verdict, "keep");
+  assert.equal(young["tmp/scratch"].verdict, "delete", "force rules ignore the age thresholds");
+});
+
+test("classifyBranch layer corners: protection wins, gate second, remote-disabled", () => {
+  // Branches the fixture doesn't include but real repos produce — the places
+  // where a naive "gate first" layering (or a mis-ordered one) would disagree
+  // with analyze.mjs. Both the bundled page copy and the real engine must
+  // answer identically and correctly.
+  const togglesOn = { squash: true, pr: true, remote: true };
+  const cfg = page.demoConfig({ merged: 21, warn: 45, aban: 0 }, togglesOn);
+  const noGateCfg = page.demoConfig({ merged: 21, warn: 45, aban: 0 }, { squash: true, pr: true, remote: false });
+  const abanCfg = page.demoConfig({ merged: 21, warn: 45, aban: 60 }, togglesOn);
+  const cases = [
+    // Protected remote, merged and old: keep — never pruned even with --remote.
+    { name: "origin/release/v1", shortName: "release/v1", type: "remote", ageDays: 90, merged: true, pr: null, want: ["keep", "protected"], cfg },
+    // Same branch younger than the merge threshold: still keep (protected).
+    { name: "origin/release/v1", shortName: "release/v1", type: "remote", ageDays: 5, merged: true, pr: null, want: ["keep", "protected"], cfg },
+    // Merged remote too young to delete: kept, not "remote-disabled".
+    { name: "origin/feature/fresh", shortName: "feature/fresh", type: "remote", ageDays: 10, merged: true, pr: null, want: ["keep", "too-young"], cfg },
+    // Old merged remote with --remote available: delete through the gate.
+    { name: "origin/feature/old", shortName: "feature/old", type: "remote", ageDays: 60, merged: true, pr: null, want: ["delete", "merged"], cfg },
+    // Remote default branch itself is never a candidate.
+    { name: "origin/main", shortName: "main", type: "remote", ageDays: 200, merged: true, pr: null, want: ["keep", "protected"], cfg },
+    // Abandoned remote PR past the threshold deletes via the gate, not a warn.
+    { name: "origin/wip/ghost", shortName: "wip/ghost", type: "remote", ageDays: 120, pr: { state: "closed", ageDays: 90 }, want: ["delete", "abandoned-pr"], cfg: abanCfg },
+    // Force rules never touch remote branches.
+    { name: "origin/tmp/scratch", shortName: "tmp/scratch", type: "remote", ageDays: 3, pr: null, want: ["keep", "active"], cfg },
+  ];
+  for (const b of cases) {
+    const ctx = analyzeCtx(b);
+    check(`layer corner ${b.name}`, () => {
+      const p = page.classifyBranch(b, b.cfg, ctx);
+      const r = classifyBranch(b, b.cfg, ctx);
+      assert.deepEqual(p, r);
+      assert.deepEqual([p.verdict, p.reason], b.want);
+    });
+  }
+  // --remote off: an old merged remote is informational only.
+  const b = { name: "origin/feature/old", shortName: "feature/old", type: "remote", ageDays: 60, merged: true, pr: null };
+  const ctx = analyzeCtx(b);
+  for (const fn of [page.classifyBranch, classifyBranch]) {
+    const d = fn(b, noGateCfg, ctx);
+    assert.deepEqual([d.verdict, d.reason], ["warn", "remote-disabled"]);
+  }
+  // Local branches never see the remote gate (abandoned local = warn only).
+  const loc = { name: "wip/ghost", type: "local", ageDays: 120, pr: { state: "closed", ageDays: 90 } };
+  const lctx = { isHead: false, baseNames: new Set(["origin/main"]), baseShort: new Set(["main"]) };
+  assert.equal(classifyBranch(loc, abanCfg, lctx).verdict, "warn");
+  assert.equal(page.classifyBranch(loc, abanCfg, lctx).verdict, "warn");
 });
 
 test("page's test-count badge matches the suite", () => {

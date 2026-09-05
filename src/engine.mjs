@@ -1,5 +1,7 @@
 // The pure branch-decision engine — the single source of truth for what
-// verdict a branch gets.
+// verdict a branch gets. classifyBranch() is the full per-branch layering
+// that analyze.mjs applies (protect first, remote gate second), so the CLI
+// and the playground page decide identically.
 //
 // Both consumers run this exact code:
 //   - the CLI, via src/classify.mjs, which re-exports everything below (and
@@ -200,4 +202,29 @@ export function classifyRemote(branch, cfg) {
     return { verdict: VERDICTS.DELETE, reason: "abandoned-pr" };
   }
   return null;
+}
+
+/**
+ * The full per-branch verdict layering used by analyzeRepo (and mirrored by
+ * the playground). For local branches that is just classify(). For remote
+ * branches, protection decisions from classify() always win (a protected
+ * remote like origin/release/v1 is never pruned), and a merged remote that
+ * the remote gate will not delete (cleanup off, or too young) is surfaced as
+ * an informational warn rather than a local-style delete.
+ *
+ * Returns { verdict, reason, rule? }.
+ */
+export function classifyBranch(branch, cfg, ctx) {
+  const c = classify(branch, cfg, ctx);
+  if (branch.type !== "remote" || c.verdict === VERDICTS.KEEP) {
+    return { verdict: c.verdict, reason: c.reason, rule: c.rule };
+  }
+  const gate = classifyRemote(branch, cfg);
+  if (gate && gate.verdict === VERDICTS.DELETE) {
+    return { verdict: gate.verdict, reason: gate.reason, rule: gate.rule };
+  }
+  if (c.verdict === VERDICTS.DELETE) {
+    return { verdict: VERDICTS.WARN, reason: "remote-disabled", rule: c.rule };
+  }
+  return { verdict: c.verdict, reason: c.reason, rule: c.rule };
 }

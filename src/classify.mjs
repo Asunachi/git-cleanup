@@ -7,7 +7,14 @@
 // config defaults and re-exports the engine so existing import sites keep
 // working.
 
-export { classify, classifyRemote, globToRegExp, matchesAny, VERDICTS } from "./engine.mjs";
+export {
+  classify,
+  classifyBranch,
+  classifyRemote,
+  globToRegExp,
+  matchesAny,
+  VERDICTS,
+} from "./engine.mjs";
 
 export function defaults() {
   return {

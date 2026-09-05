@@ -24,7 +24,8 @@ only. Please keep it that way unless there is a very strong reason not to.
 - `src/git.mjs` — all `git` plumbing (branch enumeration, merge detection,
   upstream/base resolution). No shell scripts; `git` is spawned directly.
 - `src/engine.mjs` — the pure, dependency-free decision engine (glob matching,
-  `classify`, `classifyRemote`). Single source of truth: `classify.mjs` and
+  `classify`, `classifyRemote`, and `classifyBranch`, the full per-branch
+  layering `analyze.mjs` applies). Single source of truth: `classify.mjs` and
   `util.mjs` re-export it, and the playground bundles it verbatim.
 - `src/classify.mjs` — config defaults plus re-exports of the engine.
 - `src/analyze.mjs` — gathers one repo's state and classifies every branch.

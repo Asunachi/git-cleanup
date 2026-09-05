@@ -198,7 +198,7 @@
       <span><b>Node ≥ 18</b> · zero npm deps</span>
       <span>git only — never touches <b>.git</b> internals</span>
       <span>GitHub <b>+ GitLab</b> PR enrichment</span>
-      <span><b>66</b> tests · CI on <b>Linux / macOS / Windows</b></span>
+      <span><b>68</b> tests · CI on <b>Linux / macOS / Windows</b></span>
       <span class="hot">squash/rebase-aware detection</span>
       <span class="hot">recoverable deletions (git bundles)</span>
     </div>
@@ -365,7 +365,7 @@
 <pre><span class="cmd">$ npm i -g @maliqkara/gitcleanup</span>   <span class="ghost"># adds `git-cleanup` to PATH</span>
 <span class="cmd">$ cd ~/your/repo && git-cleanup scan</span>
 <span class="cmd">$ git-cleanup prune</span>            <span class="ghost"># asks before deleting anything</span>
-<span class="cmd">$ npm test</span>                     <span class="ghost"># 66 unit + integration tests</span></pre>
+<span class="cmd">$ npm test</span>                     <span class="ghost"># 68 unit + integration tests</span></pre>
   </div>
 
   <footer>
@@ -570,53 +570,54 @@ function classifyRemote(branch, cfg) {
   }
   return null;
 }
+
+/**
+ * The full per-branch verdict layering used by analyzeRepo (and mirrored by
+ * the playground). For local branches that is just classify(). For remote
+ * branches, protection decisions from classify() always win (a protected
+ * remote like origin/release/v1 is never pruned), and a merged remote that
+ * the remote gate will not delete (cleanup off, or too young) is surfaced as
+ * an informational warn rather than a local-style delete.
+ *
+ * Returns { verdict, reason, rule? }.
+ */
+function classifyBranch(branch, cfg, ctx) {
+  const c = classify(branch, cfg, ctx);
+  if (branch.type !== "remote" || c.verdict === VERDICTS.KEEP) {
+    return { verdict: c.verdict, reason: c.reason, rule: c.rule };
+  }
+  const gate = classifyRemote(branch, cfg);
+  if (gate && gate.verdict === VERDICTS.DELETE) {
+    return { verdict: gate.verdict, reason: gate.reason, rule: gate.rule };
+  }
+  if (c.verdict === VERDICTS.DELETE) {
+    return { verdict: VERDICTS.WARN, reason: "remote-disabled", rule: c.rule };
+  }
+  return { verdict: c.verdict, reason: c.reason, rule: c.rule };
+}
   /* __ENGINE_END__ */
 
-  // Combined verdict for one branch, mirroring analyze.mjs's layering.
-  function verdictFor(branch, cfg, baseNames) {
-    var ctx = { isHead: branch.isHead, baseNames: baseNames, baseShort: new Set(["main"]) };
-    if (branch.type === "remote") {
-      var gate = classifyRemote(branch, cfg);
-      if (gate) return gate;
-      var c = classify(branch, cfg, { isHead: false, baseNames: baseNames, baseShort: ctx.baseShort });
-      if (c.verdict === "delete") return { verdict: "warn", reason: "remote-disabled" };
-      return c;
-    }
-    return classify(branch, cfg, ctx);
-  }
-
-  var REASONS = {
-    head: "checked out — never pruned",
-    protected: "protected branch",
-    "rule-force": "force rule matched — delete even unmerged",
-    merged: "merged into base, past deleteMergedAfterDays",
-    "squash-merged": "content already merged into base (squash/rebase)",
-    "merged-rule": "merged & past its rule's minAgeDays",
-    "squash-rule": "content merged & past its rule's minAgeDays",
-    "rule-young": "merged but below its rule's minAgeDays — kept",
-    "too-young": "merged recently — below the age threshold",
-    "content-young": "content in base but rewritten recently — below the age threshold",
-    "open-pr": "PR open — work is alive",
-    "stale-pr": "PR open but stale",
-    "stale-unmerged": "unmerged & stale — review before deciding",
-    "unmerged-rule": "matched a merged-only rule but is not merged — kept",
-    active: "active — nothing to do",
-    "remote-disabled": "merged, but remote cleanup needs --remote (or is off / too young)",
-    "abandoned-pr": "PR closed without merging, no activity — remote delete candidate"
-  };
-
-  // ================= simulated repo ==========================================
+  // ============= simulated repo fixture (pure demo data, no DOM) ============
+  // The parity test evals this region and runs every branch through the real
+  // engine's classifyBranch — the exact layering analyze.mjs applies — so the
+  // demo can never show a verdict the CLI would not produce. Verdicts are
+  // decided by the bundled classifyBranch above, never by this fixture.
+  /* __FIXTURE_START__ */
   var RULES = [
     { match: "tmp/*", mode: "any", minAgeDays: 1 },
     { match: "feature/slow-*", mode: "merged", minAgeDays: 90 }
   ];
 
-  var BASE_BRANCHES = new Set(["origin/main", "main"]);
+  var DEFAULT_THRESHOLDS = { merged: 21, warn: 45, aban: 0 };
 
+  // Models a repo whose default branch is origin/main. The branch set covers
+  // every role the CLI distinguishes: head, protected (local + remote),
+  // merged, squash-merged, open PR, abandoned, force-rule, active.
   function makeRepo() {
     return [
       { name: "main", type: "local", ageDays: 0, merged: true, isHead: true, pr: null },
       { name: "release/v2", type: "local", ageDays: 32, merged: true, pr: null },
+      { name: "origin/release/v1", type: "remote", ageDays: 32, merged: true, pr: null },
       { name: "feature/merged-old", type: "local", ageDays: 60, merged: true, pr: { state: "merged", ageDays: 55, number: 12 } },
       { name: "origin/feature/merged-old2", type: "remote", ageDays: 50, merged: true, pr: null },
       { name: "feature/squash-landed", type: "local", ageDays: 40, contentMerged: true, pr: { state: "merged", ageDays: 38, number: 7 } },
@@ -641,11 +642,12 @@ function classifyRemote(branch, cfg) {
     return repo.map(function (b) {
       var nb = { name: b.name, type: b.type, merged: b.merged, contentMerged: b.contentMerged, isHead: b.isHead, pr: b.pr ? { state: b.pr.state, ageDays: b.pr.ageDays, number: b.pr.number } : null };
       var pick = function (arr) { return arr[Math.floor(Math.random() * arr.length)]; };
-      if (b.name === "main" || b.name === "release/v2") { nb.ageDays = b.name === "main" ? 0 : pick([20, 32, 45]); }
-      else if (b.merged && !b.contentMerged) { nb.ageDays = pick(pools.mergedOld); }
-      else if (b.contentMerged) { nb.ageDays = pick(pools.squash); }
-      else if (b.ageDays >= 90) { nb.ageDays = pick(pools.stale); }
-      else { nb.ageDays = pick(pools.active); }
+      if (b.name === "main") nb.ageDays = 0;
+      else if (b.name === "release/v2" || b.name === "origin/release/v1") nb.ageDays = pick([20, 32, 45]);
+      else if (b.merged && !b.contentMerged) nb.ageDays = pick(pools.mergedOld);
+      else if (b.contentMerged) nb.ageDays = pick(pools.squash);
+      else if (b.ageDays >= 90) nb.ageDays = pick(pools.stale);
+      else nb.ageDays = pick(pools.active);
       if (nb.pr && nb.pr.state === "closed") nb.pr.ageDays = pick([80, 100, 130]);
       if (nb.pr && nb.pr.state === "open") nb.pr.ageDays = pick([1, 3, 40]);
       // occasionally flip an integrated branch between ancestor and squash
@@ -653,6 +655,58 @@ function classifyRemote(branch, cfg) {
       return nb;
     });
   }
+
+  // The toggles shape what the engine sees, mirroring what a real repo would
+  // report: content-merge detection off hides the squash fingerprint, PR
+  // tracking off hides PR state, --remote off disables remote deletion.
+  // Remote branches carry their short name exactly like analyze.mjs sets it
+  // (origin/release/v1 => release/v1), so protection globs match the same way.
+  function shapedBranch(b, toggles) {
+    var shortName = null;
+    if (b.type === "remote") shortName = b.name.split("/").slice(1).join("/");
+    return {
+      name: b.name, shortName: shortName, type: b.type, ageDays: b.ageDays,
+      merged: b.merged,
+      contentMerged: toggles.squash ? b.contentMerged : false,
+      isHead: b.isHead,
+      pr: toggles.pr ? b.pr : null
+    };
+  }
+
+  function demoConfig(thresholds, toggles) {
+    return {
+      protected: [],
+      deleteMergedAfterDays: thresholds.merged,
+      warnUnmergedAfterDays: thresholds.warn,
+      rules: RULES,
+      pr: { track: true },
+      remote: {
+        pruneMerged: toggles.remote,
+        deleteAbandonedAfterDays: thresholds.aban
+      }
+    };
+  }
+  /* __FIXTURE_END__ */
+
+  var REASONS = {
+    head: "checked out — never pruned",
+    protected: "protected branch",
+    "rule-force": "force rule matched — delete even unmerged",
+    merged: "merged into base, past deleteMergedAfterDays",
+    "squash-merged": "content already merged into base (squash/rebase)",
+    "merged-rule": "merged & past its rule's minAgeDays",
+    "squash-rule": "content merged & past its rule's minAgeDays",
+    "rule-young": "merged but below its rule's minAgeDays — kept",
+    "too-young": "merged recently — below the age threshold",
+    "content-young": "content in base but rewritten recently — below the age threshold",
+    "open-pr": "PR open — work is alive",
+    "stale-pr": "PR open but stale",
+    "stale-unmerged": "unmerged & stale — review before deciding",
+    "unmerged-rule": "matched a merged-only rule but is not merged — kept",
+    active: "active — nothing to do",
+    "remote-disabled": "merged, but remote cleanup needs --remote (or is off / too young)",
+    "abandoned-pr": "PR closed without merging, no activity — remote delete candidate"
+  };
 
   // ================= rendering ===============================================
   var rowsEl = document.getElementById("rows");
@@ -670,14 +724,11 @@ function classifyRemote(branch, cfg) {
     repo: makeRepo()
   };
 
-  function cfg() {
+  function thresholds() {
     return {
-      protected: [],
-      deleteMergedAfterDays: parseInt(sMerged.value, 10),
-      warnUnmergedAfterDays: parseInt(sWarn.value, 10),
-      rules: RULES,
-      pr: { track: true },
-      remote: { pruneMerged: state.remote, deleteAbandonedAfterDays: parseInt(sAban.value, 10) }
+      merged: parseInt(sMerged.value, 10),
+      warn: parseInt(sWarn.value, 10),
+      aban: parseInt(sAban.value, 10)
     };
   }
 
@@ -692,18 +743,15 @@ function classifyRemote(branch, cfg) {
   }
 
   function render() {
-    var c = cfg();
-    var baseNames = new Set(["main"]);
+    var c = demoConfig(thresholds(), state);
+    // Base context matches what analyze.mjs builds for a repo whose default
+    // branch lives on origin: baseRefs ["origin/main"], baseShort ["main"].
+    var baseNames = new Set(["origin/main"]);
+    var baseShort = new Set(["main"]);
     var counts = { delete: 0, warn: 0, keep: 0 };
-    // Toggles shape what the engine sees: content-merge detection off hides
-    // the squash fingerprint, PR tracking off hides PR state entirely.
-    var repo = state.repo.map(function (b) {
-      var nb = { name: b.name, type: b.type, ageDays: b.ageDays, merged: b.merged,
-                 contentMerged: state.squash ? b.contentMerged : false, isHead: b.isHead, pr: state.pr ? b.pr : null };
-      return nb;
-    });
+    var repo = state.repo.map(function (b) { return shapedBranch(b, state); });
     var rows = repo.map(function (b, i) {
-      var v = verdictFor(b, c, baseNames);
+      var v = classifyBranch(b, c, { isHead: b.isHead, baseNames: baseNames, baseShort: baseShort });
       counts[v.verdict]++;
       var short = shortName(b.name);
       var isRemote = b.type === "remote";
