@@ -99,7 +99,9 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
    re-run), use Actions → **release-check** → *Run workflow* on any branch.
 6. Create a GitHub Release for the tag with notes from the matching
    CHANGELOG entry and a link to the npm package
-   (https://www.npmjs.com/package/@maliqkara/gitcleanup).
+   (https://www.npmjs.com/package/@maliqkara/gitcleanup). If the action is
+   published on the GitHub Marketplace, the listing updates automatically
+   from the new tag — nothing to resubmit (see `docs/marketplace.md`).
 
 ### Tagging past releases
 
