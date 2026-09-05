@@ -574,10 +574,13 @@ test("-d fallback keeps real refusals visible with a spaced worktree path (Windo
     const summary = await pruneRepo(repo, cfg, { yes: true });
     assert.equal(summary.errors.length, 1, JSON.stringify(summary.errors));
     assert.match(summary.errors[0].error, /used by worktree|checked out at/);
-    // The refusal must name the exact worktree path, backslashes normalized
-    // so the same assertion holds on Windows and POSIX.
-    const errPath = summary.errors[0].error.replace(/\\/g, "/");
-    assert.ok(errPath.includes(wtDir.replace(/\\/g, "/")), summary.errors[0].error);
+    // The refusal must name the spaced worktree. Windows git canonicalizes
+    // the path it registered (separators, drive-letter case, and sometimes
+    // 8.3 short names), so compare the distinctive basename — preserved by
+    // every rendering — rather than the full path string.
+    const norm = (s) => s.replace(/\\/g, "/").toLowerCase();
+    assert.ok(norm(summary.errors[0].error).includes("worktree with spaces"), summary.errors[0].error);
+    assert.ok(norm(wtDir).includes("worktree with spaces"));
     assert.ok(!summary.deletedLocal.includes("feature/wt-spaced"));
     const names = listBranches(r.work, "heads").map((b) => b.name);
     assert.ok(names.includes("feature/wt-spaced"));
