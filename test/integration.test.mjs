@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DAY, commit, makeSquashRepo, makeWorkRepo, merge, sh } from "./helpers.mjs";
+import { DAY, commit, makeSquashRepo, makeWorkRepo, merge, sh } from "../support/helpers.mjs";
 import { analyzeRepo } from "../src/analyze.mjs";
 import { pruneRepo } from "../src/prune.mjs";
 import { defaults, VERDICTS } from "../src/classify.mjs";
@@ -437,6 +437,47 @@ test("CLI: --repo pointing at a file errors cleanly (no ENOTDIR crash)", () => {
     const doc = JSON.parse(j.stdout);
     assert.equal(doc.repos[0].notGit, true);
     assert.match(doc.repos[0].error, /is not a directory/);
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
+test("CLI: --repo / --config reject a missing value or a swallowed flag", () => {
+  const f = fixture();
+  try {
+    const home = mkdtempSync(join(tmpdir(), "gc-home-"));
+    const env = { ...process.env, HOME: home, GIT_CLEANUP_NO_COLOR: "1" };
+    const runCli = (args) =>
+      spawnSync(process.execPath, [BIN, ...args], {
+        cwd: ROOT,
+        encoding: "utf8",
+        env,
+      });
+
+    // A flag directly after --repo / --config must not be swallowed as the
+    // value: `--repo --json` used to silently treat --json as the repo path.
+    for (const args of [
+      ["scan", "--repo", "--json"],
+      ["scan", "--repo"],
+      ["prs", "--repo", "--close"],
+      ["scan", "--config", "--json"],
+      ["scan", "--config"],
+    ]) {
+      const r = runCli(args);
+      assert.equal(r.status, 1, `${args.join(" ")}: ${r.stdout}${r.stderr}`);
+      assert.match(
+        r.stderr,
+        /missing value for --(repo|config)/,
+        args.join(" ")
+      );
+    }
+
+    // And a legit value still works: --json after the value is honored.
+    const ok = runCli(["scan", "--json", "--repo", f.work]);
+    assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+    const doc = JSON.parse(ok.stdout);
+    assert.equal(doc.repos[0].path, f.work);
   } finally {
     f.cleanup();
     repos.pop();

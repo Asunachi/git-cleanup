@@ -25,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refusal names the exact path with separators normalized, and the refusal
   matcher accepts both git phrasings (`used by worktree at` / `checked out
   at`) so it holds across git versions on the CI OS matrix.
+- The decision engine moved to a single source of truth (`src/engine.mjs`,
+  dependency-free): `src/classify.mjs` and `src/util.mjs` re-export it, and
+  the playground page bundles it verbatim via
+  `npm run sync:playground` (scripts/sync-playground.mjs) instead of the
+  hand-ported twin that had drifted twice. A parity test now compares the
+  page's bundled engine against the real one across the full verdict space
+  and fails CI if they diverge — and it also pins the page's "N tests"
+  badge to the actual suite size so the demo can't lie about coverage
+  again. A reset button returns the playground to its default thresholds.
+
+### Fixed
+
+- `--repo --json` (or `--config --json`) no longer silently swallows the
+  following flag as the value: a value that is missing or starts with `-`
+  now errors with `missing value for --repo/--config` instead of treating
+  `--json` as a repo path.
+- The test suite's reported size is now the true count on every Node
+  version: `test/helpers.mjs` moved to `support/helpers.mjs` so Node's test
+  runner no longer counts the fixture file itself as a passing test.
 
 ## [0.2.6] - 2026-09-05
 

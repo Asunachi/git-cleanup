@@ -1,53 +1,8 @@
-// Small shared helpers: glob matching, date math, terminal colors.
+// Small shared helpers: date math, terminal colors, and re-exports of the
+// glob matcher (which lives in ./engine.mjs so the playground page can bundle
+// the exact same code).
 
-const ESCAPE_RE = /[.+^${}()|[\]\\]/g;
-
-function escapeChar(ch) {
-  return ch.replace(ESCAPE_RE, "\\$&");
-}
-
-/**
- * Convert a git-style glob into an anchored RegExp.
- * Supported wildcards:
- *   double star: matches anything, including "/" (multiple path segments)
- *   single star: matches any characters except "/"
- *   question:    matches a single character except "/"
- *
- * A double star directly followed by a slash (e.g. a leading globstar-slash
- * prefix) is optional, so that pattern also matches the bare name on its own.
- */
-export function globToRegExp(glob) {
-  let source = "";
-  for (let i = 0; i < glob.length; ) {
-    const ch = glob[i];
-    if (ch === "*") {
-      if (glob[i + 1] === "*") {
-        if (glob[i + 2] === "/") {
-          source += "(?:.*/)?";
-          i += 3;
-        } else {
-          source += ".*";
-          i += 2;
-        }
-      } else {
-        source += "[^/]*";
-        i += 1;
-      }
-    } else if (ch === "?") {
-      source += "[^/]";
-      i += 1;
-    } else {
-      source += escapeChar(ch);
-      i += 1;
-    }
-  }
-  return new RegExp(`^${source}$`);
-}
-
-/** True when `name` matches any glob in `patterns`. */
-export function matchesAny(patterns, name) {
-  return patterns.some((p) => globToRegExp(p).test(name));
-}
+export { globToRegExp, matchesAny } from "./engine.mjs";
 
 const DAY_SECONDS = 24 * 60 * 60;
 

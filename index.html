@@ -97,6 +97,8 @@
   button.chip.on { border-color: rgba(63,185,80,.6); color: var(--green); }
   button.chip.shuffle { border-color: rgba(163,113,247,.5); color: var(--violet); }
   button.chip.shuffle:hover { background: rgba(163,113,247,.12); }
+  button.chip.reset { border-color: var(--border); color: var(--dim); }
+  button.chip.reset:hover { border-color: var(--cyan); color: var(--text); }
 
   .axis { position: relative; height: 13px; color: var(--dim); font: 10px var(--mono); margin: 14px 0 2px; }
   .axis .mk { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
@@ -196,15 +198,16 @@
       <span><b>Node ≥ 18</b> · zero npm deps</span>
       <span>git only — never touches <b>.git</b> internals</span>
       <span>GitHub <b>+ GitLab</b> PR enrichment</span>
-      <span><b>62</b> tests · CI on <b>Linux / macOS / Windows</b></span>
+      <span><b>66</b> tests · CI on <b>Linux / macOS / Windows</b></span>
       <span class="hot">squash/rebase-aware detection</span>
       <span class="hot">recoverable deletions (git bundles)</span>
     </div>
   </header>
 
   <h2><span class="num">01</span>Live playground<span class="live"><span class="dot"></span>LIVE</span></h2>
-  <p class="dim" style="margin:-4px 0 0">A simulated repo with a faithful port of <code>src/classify.mjs</code>. Drag the
-    thresholds and watch every branch re-classify instantly.</p>
+  <p class="dim" style="margin:-4px 0 0">A simulated repo running the real decision engine — <code>src/engine.mjs</code>,
+    bundled into this page, pinned to the CLI by a parity test. Drag the thresholds and watch every branch
+    re-classify instantly.</p>
 
   <div class="panel">
     <div class="play-head">
@@ -226,6 +229,7 @@
           <button class="chip on" id="t-pr">PR tracking</button>
           <button class="chip on" id="t-remote">remote prune (--remote)</button>
           <button class="chip shuffle" id="b-shuffle">↻ shuffle repo</button>
+          <button class="chip reset" id="b-reset">↺ reset</button>
         </div>
       </div>
     </div>
@@ -361,12 +365,12 @@
 <pre><span class="cmd">$ npm i -g @maliqkara/gitcleanup</span>   <span class="ghost"># adds `git-cleanup` to PATH</span>
 <span class="cmd">$ cd ~/your/repo && git-cleanup scan</span>
 <span class="cmd">$ git-cleanup prune</span>            <span class="ghost"># asks before deleting anything</span>
-<span class="cmd">$ npm test</span>                     <span class="ghost"># 62 unit + integration tests</span></pre>
+<span class="cmd">$ npm test</span>                     <span class="ghost"># 66 unit + integration tests</span></pre>
   </div>
 
   <footer>
     git-cleanup · <a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a> ·
-    the playground mirrors <code>src/classify.mjs</code> in your browser; the CLI is the source of truth.
+    the playground runs the same engine as the CLI — bundled from <code>src/engine.mjs</code>, pinned by a parity test.
   </footer>
 </div>
 
@@ -374,85 +378,199 @@
 (function () {
   "use strict";
 
-  // ================= faithful ports of the CLI's decision engine =============
-  var ESCAPE_RE = /[.+^${}()|[\]\\]/g;
-  function globToRegExp(glob) {
-    var source = "";
-    for (var i = 0; i < glob.length; ) {
-      var ch = glob[i];
-      if (ch === "*") {
-        if (glob[i + 1] === "*") {
-          if (glob[i + 2] === "/") { source += "(?:.*/)?"; i += 3; }
-          else { source += ".*"; i += 2; }
-        } else { source += "[^/]*"; i += 1; }
-      } else if (ch === "?") {
-        source += "[^/]"; i += 1;
-      } else {
-        source += ch.replace(ESCAPE_RE, "\\$&"); i += 1;
-      }
-    }
-    return new RegExp("^" + source + "$");
-  }
-  function matchesAny(patterns, name) {
-    return patterns.some(function (p) { return globToRegExp(p).test(name); });
-  }
+  // ================= real decision engine (bundled from src/engine.mjs) ====
+  // Do not edit between the markers by hand: run `npm run sync:playground`.
+  /* __ENGINE_START__ */
+// ---- glob matching (git-style: `*` / `**` / `?`) --------------------------
 
-  var DEFAULT_PROTECTED = ["main", "master", "develop", "dev", "release", "release/**", "staging", "qa", "trunk", "HEAD"];
-  function ruleAge(rule, cfg) {
-    if (Number.isFinite(rule.minAgeDays)) return rule.minAgeDays;
-    return rule.mode === "any" ? 0 : cfg.deleteMergedAfterDays;
-  }
+const ESCAPE_RE = /[.+^${}()|[\]\\]/g;
 
-  function classify(branch, cfg, ctx) {
-    var name = branch.shortName || branch.name;
-    var protectedAll = DEFAULT_PROTECTED.concat(cfg.protected || []);
-    if (ctx.isHead || (ctx.baseNames && ctx.baseNames.has(branch.name)) ||
-        (ctx.baseShort && ctx.baseShort.has(name)) || matchesAny(protectedAll, name)) {
-      return { verdict: "keep", reason: ctx.isHead ? "head" : "protected" };
-    }
-    var rule = branch.type === "local"
-      ? (cfg.rules || []).filter(function (r) { return matchesAny([r.match], name); })[0]
-      : undefined;
-    if (rule && rule.mode === "any" && branch.ageDays >= ruleAge(rule, cfg)) {
-      return { verdict: "delete", reason: "rule-force", rule: rule.match };
-    }
-    var integrated = branch.merged || branch.contentMerged;
-    if (integrated) {
-      var ancestor = Boolean(branch.merged);
-      if (rule && rule.mode === "merged") {
-        if (branch.ageDays >= ruleAge(rule, cfg)) {
-          return { verdict: "delete", reason: ancestor ? "merged-rule" : "squash-rule", rule: rule.match };
+function escapeChar(ch) {
+  return ch.replace(ESCAPE_RE, "\\$&");
+}
+
+/**
+ * Convert a git-style glob into an anchored RegExp.
+ * Supported wildcards:
+ *   double star: matches anything, including "/" (multiple path segments)
+ *   single star: matches any characters except "/"
+ *   question:    matches a single character except "/"
+ *
+ * A double star directly followed by a slash (e.g. a leading globstar-slash
+ * prefix) is optional, so that pattern also matches the bare name on its own.
+ */
+function globToRegExp(glob) {
+  let source = "";
+  for (let i = 0; i < glob.length; ) {
+    const ch = glob[i];
+    if (ch === "*") {
+      if (glob[i + 1] === "*") {
+        if (glob[i + 2] === "/") {
+          source += "(?:.*/)?";
+          i += 3;
+        } else {
+          source += ".*";
+          i += 2;
         }
-        return { verdict: "keep", reason: "rule-young" };
+      } else {
+        source += "[^/]*";
+        i += 1;
       }
-      if (branch.ageDays >= cfg.deleteMergedAfterDays) {
-        return { verdict: "delete", reason: ancestor ? "merged" : "squash-merged" };
-      }
-      return { verdict: "keep", reason: ancestor ? "too-young" : "content-young" };
+    } else if (ch === "?") {
+      source += "[^/]";
+      i += 1;
+    } else {
+      source += escapeChar(ch);
+      i += 1;
     }
-    if (branch.pr && branch.pr.state === "open") {
-      if (branch.pr.ageDays < cfg.warnUnmergedAfterDays) return { verdict: "keep", reason: "open-pr" };
-      return { verdict: "warn", reason: "stale-pr" };
-    }
-    if (rule && rule.mode === "merged") return { verdict: "keep", reason: "unmerged-rule" };
-    if (branch.ageDays >= cfg.warnUnmergedAfterDays) return { verdict: "warn", reason: "stale-unmerged" };
-    return { verdict: "keep", reason: "active" };
+  }
+  return new RegExp(`^${source}$`);
+}
+
+/** True when `name` matches any glob in `patterns`. */
+function matchesAny(patterns, name) {
+  return patterns.some((p) => globToRegExp(p).test(name));
+}
+
+// ---- verdicts + classification ---------------------------------------------
+
+const VERDICTS = {
+  DELETE: "delete", // safe to prune
+  WARN: "warn", // stale but needs a human decision
+  KEEP: "keep", // active / protected / too young
+};
+
+const DEFAULT_PROTECTED = [
+  "main",
+  "master",
+  "develop",
+  "dev",
+  "release",
+  "release/**",
+  "staging",
+  "qa",
+  "trunk",
+  "HEAD",
+];
+
+/** Days a rule requires before it fires (defaults per mode). */
+function ruleAge(rule, cfg) {
+  if (Number.isFinite(rule.minAgeDays)) return rule.minAgeDays;
+  return rule.mode === "any" ? 0 : cfg.deleteMergedAfterDays;
+}
+
+/**
+ * classify a single branch.
+ * branch: { name, type: "local"|"remote", shortName, ageDays, merged, orphan, pr }
+ * ctx:    { isHead, baseNames:Set<string>, baseShort:Set<string> }
+ *
+ * Rules only ever apply to local branches; remote pruning has its own,
+ * narrower gate (see classifyRemote).
+ */
+function classify(branch, cfg, ctx) {
+  const name = branch.shortName ?? branch.name;
+
+  // 1. Never touch protected refs, the checked-out branch, or base branches.
+  const protectedAll = [...DEFAULT_PROTECTED, ...(cfg.protected ?? [])];
+  if (
+    ctx.isHead ||
+    ctx.baseNames.has(branch.name) ||
+    ctx.baseShort.has(name) ||
+    matchesAny(protectedAll, name)
+  ) {
+    return {
+      verdict: VERDICTS.KEEP,
+      reason: ctx.isHead ? "head" : "protected",
+    };
   }
 
-  function classifyRemote(branch, cfg) {
-    if (branch.merged || branch.contentMerged) {
-      if (!cfg.remote.pruneMerged) return null;
-      if (branch.ageDays >= cfg.deleteMergedAfterDays) {
-        return { verdict: "delete", reason: branch.merged ? "merged" : "squash-merged" };
+  const rule =
+    branch.type === "local"
+      ? (cfg.rules ?? []).find((r) => matchesAny([r.match], name))
+      : undefined;
+
+  // 2. Explicit force rule: delete regardless of merge state.
+  if (rule && rule.mode === "any" && branch.ageDays >= ruleAge(rule, cfg)) {
+    return { verdict: VERDICTS.DELETE, reason: "rule-force", rule: rule.match };
+  }
+
+  // 3. Integrated work: the safe, default cleanup path. Two flavors:
+  //   merged        - tip is an ancestor of a base branch (regular merge)
+  //   contentMerged - tip tree already exists in base history (squash/rebase)
+  // A matching merged-mode rule fully owns the threshold for that branch (it
+  // can raise OR lower the generic deleteMergedAfterDays), so do not fall
+  // through to the generic one.
+  const integrated = branch.merged || branch.contentMerged;
+  if (integrated) {
+    const ancestor = Boolean(branch.merged);
+    if (rule && rule.mode === "merged") {
+      if (branch.ageDays >= ruleAge(rule, cfg)) {
+        return {
+          verdict: VERDICTS.DELETE,
+          reason: ancestor ? "merged-rule" : "squash-rule",
+          rule: rule.match,
+        };
       }
-      return null;
+      return { verdict: VERDICTS.KEEP, reason: "rule-young" };
     }
-    if (cfg.remote.deleteAbandonedAfterDays > 0 && branch.pr &&
-        branch.pr.state === "closed" && branch.pr.ageDays >= cfg.remote.deleteAbandonedAfterDays) {
-      return { verdict: "delete", reason: "abandoned-pr" };
+    if (branch.ageDays >= cfg.deleteMergedAfterDays) {
+      return {
+        verdict: VERDICTS.DELETE,
+        reason: ancestor ? "merged" : "squash-merged",
+      };
+    }
+    return {
+      verdict: VERDICTS.KEEP,
+      reason: ancestor ? "too-young" : "content-young",
+    };
+  }
+
+  // 4. Unmerged branches.
+  if (branch.pr && branch.pr.state === "open") {
+    // An open PR means the work is (probably) alive.
+    if (branch.pr.ageDays < cfg.warnUnmergedAfterDays) {
+      return { verdict: VERDICTS.KEEP, reason: "open-pr" };
+    }
+    return { verdict: VERDICTS.WARN, reason: "stale-pr" };
+  }
+  if (rule && rule.mode === "merged") {
+    // A merged-only rule matched but the branch is not merged: keep it.
+    return { verdict: VERDICTS.KEEP, reason: "unmerged-rule" };
+  }
+  if (branch.ageDays >= cfg.warnUnmergedAfterDays) {
+    return { verdict: VERDICTS.WARN, reason: "stale-unmerged" };
+  }
+  return { verdict: VERDICTS.KEEP, reason: "active" };
+}
+
+/**
+ * Gate for remote pruning (applies only when the user opted into touching
+ * remote branches). Returns { verdict, reason } or null when the branch is
+ * not eligible for remote cleanup under the current config.
+ */
+function classifyRemote(branch, cfg) {
+  if (branch.merged || branch.contentMerged) {
+    if (!cfg.remote.pruneMerged) return null;
+    if (branch.ageDays >= cfg.deleteMergedAfterDays) {
+      return {
+        verdict: VERDICTS.DELETE,
+        reason: branch.merged ? "merged" : "squash-merged",
+      };
     }
     return null;
   }
+  // Abandoned PR: closed without merging, no activity for a while.
+  if (
+    cfg.remote.deleteAbandonedAfterDays > 0 &&
+    branch.pr &&
+    branch.pr.state === "closed" &&
+    branch.pr.ageDays >= cfg.remote.deleteAbandonedAfterDays
+  ) {
+    return { verdict: VERDICTS.DELETE, reason: "abandoned-pr" };
+  }
+  return null;
+}
+  /* __ENGINE_END__ */
 
   // Combined verdict for one branch, mirroring analyze.mjs's layering.
   function verdictFor(branch, cfg, baseNames) {
@@ -671,6 +789,15 @@
   bindToggle(tRemote, "remote");
   document.getElementById("b-shuffle").addEventListener("click", function () {
     state.repo = shuffle(state.repo);
+    render();
+  });
+  document.getElementById("b-reset").addEventListener("click", function () {
+    sMerged.value = "21"; sWarn.value = "45"; sAban.value = "0";
+    document.getElementById("v-merged").textContent = "21d";
+    document.getElementById("v-warn").textContent = "45d";
+    document.getElementById("v-aban").textContent = "off";
+    state.squash = true; state.pr = true; state.remote = true;
+    tSquash.classList.add("on"); tPr.classList.add("on"); tRemote.classList.add("on");
     render();
   });
 

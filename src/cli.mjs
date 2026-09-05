@@ -63,9 +63,20 @@ function parseArgs(argv) {
   };
   let command = "scan";
   const positional = [];
-  for (let i = 0; i < argv.length; i++) {
+  let i = 0;
+  // Consume the value of a flag that takes one (--repo / --config). Refuses
+  // a missing value AND a value that looks like another flag (--repo --json
+  // must not silently swallow --json as the repo path).
+  const takeValue = (flag) => {
+    const v = argv[i + 1];
+    if (v === undefined || v.startsWith("-")) {
+      throw new Error(`missing value for ${flag}\n\n${USAGE}`);
+    }
+    i += 1;
+    return v;
+  };
+  for (; i < argv.length; i++) {
     const a = argv[i];
-    const next = () => argv[++i];
     switch (a) {
       case "scan":
       case "prune":
@@ -97,10 +108,10 @@ function parseArgs(argv) {
         opts.close = true;
         break;
       case "--config":
-        opts.configFile = next();
+        opts.configFile = takeValue("--config");
         break;
       case "--repo":
-        opts.repoFlags.push(next());
+        opts.repoFlags.push(takeValue("--repo"));
         break;
       case "-h":
       case "--help":
@@ -116,9 +127,6 @@ function parseArgs(argv) {
         }
         positional.push(a);
         break;
-    }
-    if (opts.configFile === undefined || opts.repoFlags.includes(undefined)) {
-      throw new Error(`missing value for ${a}\n\n${USAGE}`);
     }
   }
   if (positional.length > 0 && !["help"].includes(command)) {

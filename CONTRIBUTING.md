@@ -23,7 +23,10 @@ only. Please keep it that way unless there is a very strong reason not to.
 
 - `src/git.mjs` — all `git` plumbing (branch enumeration, merge detection,
   upstream/base resolution). No shell scripts; `git` is spawned directly.
-- `src/classify.mjs` — the decision engine and config defaults.
+- `src/engine.mjs` — the pure, dependency-free decision engine (glob matching,
+  `classify`, `classifyRemote`). Single source of truth: `classify.mjs` and
+  `util.mjs` re-export it, and the playground bundles it verbatim.
+- `src/classify.mjs` — config defaults plus re-exports of the engine.
 - `src/analyze.mjs` — gathers one repo's state and classifies every branch.
 - `src/config.mjs` — config discovery and layering.
 - `src/forge.mjs` — forge abstraction: provider registry, remote detection by
@@ -33,17 +36,23 @@ only. Please keep it that way unless there is a very strong reason not to.
   and register in `forge.mjs`.
 - `src/prune.mjs` — deletion with confirmation guards.
 - `src/report.mjs` / `src/cli.mjs` — rendering and command-line interface.
-- `test/` — unit tests plus integration tests against throwaway repos.
+- `test/` — unit tests plus integration tests against throwaway repos
+  (`support/helpers.mjs` holds the repo-building fixtures; it lives outside
+  `test/` so Node's test runner doesn't count it as a test file).
+- `scripts/sync-playground.mjs` — bundles `src/engine.mjs` into `index.html`
+  (run `npm run sync:playground` after editing the engine).
 - `index.html` — a standalone documentation page with interactive demos that
-  mirror the CLI logic; keep it in sync when `classify.mjs` / `util.mjs` change.
+  run the real engine. Don't hand-edit between the `__ENGINE__` markers:
+  regenerate with `npm run sync:playground`.
 
 ## Making changes
 
 1. Open an issue or PR describing what you're changing and why.
 2. Keep changes scoped. Add a test for anything you fix.
 3. Run `npm test` — everything must pass.
-4. If you touched the decision logic, make sure the interactive demo on
-   `index.html` still agrees with the CLI.
+4. If you touched the decision logic (`src/engine.mjs`), run
+   `npm run sync:playground` to re-bundle it into the demo page —
+   `test/playground-parity.test.mjs` fails CI if the page's copy drifts.
 
 ## Design constraints to respect
 
