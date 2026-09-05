@@ -312,7 +312,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.2.3
+      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.2.6
         with:
           path: .
           report: issue
@@ -320,9 +320,12 @@ jobs:
 ```
 
 Release tags: `v0.2.1` (first npm-published CLI version), `v0.2.2` (the
-action + backup safety net), and `v0.2.3` (current: action output fixes,
-backup retention, forge abstraction) — all matching what npm serves.
-Pin `@v0.2.3` as shown; use `@main` only if you want the action to track
+action + backup safety net), `v0.2.3` (action output fixes, backup
+retention, forge abstraction), `v0.2.4` (GitLab provider, cross-platform
+CI, interactive playground), `v0.2.5` (JSON contract + error-path fixes),
+and `v0.2.6` (current: `-d` fallback for remote-merged branches,
+end-to-end prs tests) — all matching what npm serves.
+Pin `@v0.2.6` as shown; use `@main` only if you want the action to track
 unreleased changes. (`v0.2.1`'s tree predates the action, so it cannot be
 used to pin it.)
 
