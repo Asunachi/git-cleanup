@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-09-05
+
 ### Fixed
 
 - When `git branch -d` refuses because a branch is merged into a remote base
@@ -15,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and force-deleted — recoverable even if that base ref later disappears. A
   failed backup still aborts the deletion, and real refusals (a branch
   checked out in another worktree) still surface as errors.
+
+### Added
+
+- End-to-end tests for `prs --json` and `prs --close` with a stubbed GitHub
+  API (multi-repo document shape, API-failure error entries, and the close
+  flow: `PATCH state: closed` + comment per stale PR, fresh PRs untouched).
 
 ## [0.2.5] - 2026-09-05
 
