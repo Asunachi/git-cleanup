@@ -52,8 +52,10 @@ only. Please keep it that way unless there is a very strong reason not to.
 2. Keep changes scoped. Add a test for anything you fix.
 3. Run `npm test` — everything must pass.
 4. If you touched the decision logic (`src/engine.mjs`), run
-   `npm run sync:playground` to re-bundle it into the demo page —
-   `test/playground-parity.test.mjs` fails CI if the page's copy drifts.
+   `npm run sync:playground` to re-bundle it into the demo page and commit
+   the result — CI enforces this twice: `test/playground-parity.test.mjs`
+   fails if the page's copy drifts, and the `playground-fresh` job fails the
+   build if the committed bundle isn't the output of the sync script.
 
 ## Design constraints to respect
 

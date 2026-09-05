@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- CI now hard-fails on any commit whose playground bundle is stale: a
+  dedicated `playground-fresh` job runs `npm run sync:playground` on the
+  merged tree and fails if it produces a diff, so a commit touching
+  `src/engine.mjs` without re-bundling it into `index.html` can never land.
+  (The parity tests already caught behavioral drift; this catches the
+  un-committed sync itself.)
+
 ## [0.2.7] - 2026-09-05
 
 ### Fixed

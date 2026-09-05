@@ -40,3 +40,28 @@ jobs:
             echo "expected scan to fail on a missing repo" >&2
             exit 1
           fi
+
+  # The playground page bundles src/engine.mjs between __ENGINE__ markers via
+  # `npm run sync:playground`. This is a content-identity check (engine change
+  # => page copy must change in the same commit), so it runs once on Linux
+  # rather than on every OS: it reads and rewrites the file, which makes it
+  # sensitive to checkout line-ending conversion on Windows runners.
+  playground-fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Bundled playground engine must be committed in sync
+        shell: bash
+        run: |
+          npm run sync:playground
+          if ! git diff --exit-code --quiet -- index.html; then
+            echo "::error::index.html is out of sync with src/engine.mjs — run 'npm run sync:playground' and commit the result."
+            git diff --stat -- index.html
+            exit 1
+          fi
+          echo "playground bundle is in sync with src/engine.mjs"
