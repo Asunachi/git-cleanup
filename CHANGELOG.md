@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The parity fuzz is volume-configurable and CI sweeps it deep: the test
+  reads `FUZZ_CASES` (default 2,000 — local `npm test` stays fast) and
+  `FUZZ_SEED` (default fixed, so failures stay reproducible). CI runs every
+  push and pull request at 50,000 shapes, and a nightly schedule plus
+  `workflow_dispatch` re-sweep the seed space on days without pushes. The
+  coverage assertions scale with the volume, so the sweep can't go
+  vacuously green at any depth.
+
 ## [0.2.8] - 2026-09-05
 
 ### Added

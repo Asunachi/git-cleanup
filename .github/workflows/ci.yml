@@ -3,6 +3,11 @@ name: CI
 on:
   push:
   pull_request:
+  # Nightly deep sweep: the parity fuzz runs at 50,000 shapes (FUZZ_CASES)
+  # so the engine/page-bundle space is re-swept even on days with no pushes.
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
 
 # Cancel outdated runs for the same branch so quick pushes don't queue up.
 concurrency:
@@ -28,6 +33,11 @@ jobs:
         # bash so the suite behaves identically on every OS (Git Bash on
         # Windows runners; `npm test` spawns git itself, never a shell).
         shell: bash
+        # High-volume parity fuzz in CI; local `npm test` stays at the fast
+        # 2,000-shape default. Raise further via FUZZ_CASES in a manual
+        # workflow_dispatch, and add FUZZ_SEED to sweep different space.
+        env:
+          FUZZ_CASES: "50000"
         run: npm test
 
       - name: Smoke-check the CLI

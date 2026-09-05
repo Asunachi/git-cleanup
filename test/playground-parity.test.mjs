@@ -344,9 +344,11 @@ test("page bundle vs engine: classifyRemote agrees", () => {
 
 // ---- seeded property test ------------------------------------------------
 // Hand-picked cases above can miss the combination that breaks parity. This
-// throws hundreds of random branch x config x context shapes at BOTH the
-// page's bundled engine and the real one and requires byte-identical
-// verdicts. Deterministic: a fixed seed means a failure is reproducible.
+// throws FUZZ_CASES (default 2,000; CI sweeps 50,000 per run) random branch
+// x config x context shapes at BOTH the page's bundled engine and the real
+// one and requires byte-identical verdicts. Deterministic: FUZZ_SEED (default
+// 0x6c7e2d) fixes the sequence, so a failure is reproducible and different
+// seeds sweep different space.
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -489,15 +491,30 @@ function randCtx(rnd, branch) {
   };
 }
 
-test("fuzz: page bundle and engine agree on 2000 random branch x config x ctx shapes", () => {
-  const rnd = mulberry32(0x6c7e2d);
+// Volume and seed are configurable so CI can sweep far deeper than the
+// fast local default: FUZZ_CASES (default 2000) sets how many shapes to
+// throw, FUZZ_SEED (default 0x6c7e2d) sets the PRNG seed — a fixed seed
+// keeps any failure reproducible, and different seeds sweep different space.
+const FUZZ_DEFAULT_CASES = 2000;
+const FUZZ_DEFAULT_SEED = 0x6c7e2d;
+const FUZZ_CASES = Number.parseInt(
+  process.env.FUZZ_CASES ?? "",
+  10
+) || FUZZ_DEFAULT_CASES;
+const parsedSeed = Number(process.env.FUZZ_SEED);
+const FUZZ_SEED = Number.isNaN(parsedSeed)
+  ? FUZZ_DEFAULT_SEED
+  : Math.floor(parsedSeed) >>> 0;
+
+test(`fuzz: page bundle and engine agree on ${FUZZ_CASES} random branch x config x ctx shapes`, () => {
+  const rnd = mulberry32(FUZZ_SEED);
   const verdicts = { delete: 0, warn: 0, keep: 0 };
   const reasons = new Set();
   let remotes = 0;
   let rulesSeen = 0;
   let protectedSeen = 0;
 
-  for (let i = 0; i < 2000; i++) {
+  for (let i = 0; i < FUZZ_CASES; i++) {
     const branch = randBranch(rnd, i);
     const cfg = randConfig(rnd);
     const ctx = randCtx(rnd, branch);
@@ -545,11 +562,21 @@ test("fuzz: page bundle and engine agree on 2000 random branch x config x ctx sh
   // The generator must actually have exercised the space, or the test is
   // vacuously green: every verdict, a spread of reasons, remotes, rules,
   // and protected branches all seen.
-  assert.ok(verdicts.delete > 50, `delete verdicts: ${verdicts.delete}`);
-  assert.ok(verdicts.warn > 50, `warn verdicts: ${verdicts.warn}`);
-  assert.ok(verdicts.keep > 100, `keep verdicts: ${verdicts.keep}`);
-  assert.ok(reasons.size > 10, `reason variety: ${reasons.size}`);
-  assert.ok(remotes > 200, `remote branches: ${remotes}`);
-  assert.ok(rulesSeen > 400, `cases with rules: ${rulesSeen}`);
-  assert.ok(protectedSeen > 50, `protected/head outcomes: ${protectedSeen}`);
+  // Coverage thresholds scale with volume so the sweep can't go vacuously
+  // green at any depth: ~2.5% of cases should land in each of delete/warn,
+  // ~5% in keep, and the rest of the spread must be seen too.
+  const min = (n, pct, label) => {
+    const floor = Math.floor(FUZZ_CASES * pct);
+    assert.ok(n > floor, `${label}: ${n} (need > ${floor} at ${FUZZ_CASES} cases)`);
+  };
+  min(verdicts.delete, 0.025, "delete verdicts");
+  min(verdicts.warn, 0.025, "warn verdicts");
+  min(verdicts.keep, 0.05, "keep verdicts");
+  min(remotes, 0.1, "remote branches");
+  min(rulesSeen, 0.2, "cases with rules");
+  min(protectedSeen, 0.025, "protected/head outcomes");
+  assert.ok(
+    reasons.size > 10 && reasons.size >= Math.min(15, FUZZ_CASES),
+    `reason variety: ${reasons.size} of ${FUZZ_CASES} cases`
+  );
 });
