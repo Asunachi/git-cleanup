@@ -146,6 +146,13 @@ Prints the candidates, then asks before deleting, grouped by risk:
 4. merged/abandoned remote branches when `--remote` is passed (default **yes**,
    only offered with `--remote`).
 
+Ancestor-merged branches are deleted with plain `-d`. If git refuses because
+the branch is merged into a remote base branch but not your local `HEAD` (a
+stale local default branch), git-cleanup backs the branch up and
+force-deletes it instead: the scan already proved its commits are reachable
+from the base, and the safety bundle covers even that ref disappearing
+later. A failed backup aborts the deletion.
+
 Pass `--yes` (or set `GIT_CLEANUP_YES=1`) to run non-interactively. Remote
 deletion is `git push <remote> --delete <branch>`.
 

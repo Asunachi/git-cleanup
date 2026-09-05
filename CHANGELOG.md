@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- When `git branch -d` refuses because a branch is merged into a remote base
+  branch but not the local `HEAD` (e.g. a stale local default branch), prune
+  no longer reports a dead-end error. The scan has already proven the tip is
+  an ancestor of a base ref, so the branch is backed up into a safety bundle
+  and force-deleted — recoverable even if that base ref later disappears. A
+  failed backup still aborts the deletion, and real refusals (a branch
+  checked out in another worktree) still surface as errors.
+
 ## [0.2.5] - 2026-09-05
 
 ### Fixed

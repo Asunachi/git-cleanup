@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DAY, makeSquashRepo, makeWorkRepo, sh } from "./helpers.mjs";
+import { DAY, commit, makeSquashRepo, makeWorkRepo, merge, sh } from "./helpers.mjs";
 import { analyzeRepo } from "../src/analyze.mjs";
 import { pruneRepo } from "../src/prune.mjs";
 import { defaults, VERDICTS } from "../src/classify.mjs";
@@ -471,5 +471,84 @@ test("CLI: prs --json always emits one parseable JSON document", () => {
   } finally {
     f.cleanup();
     repos.pop();
+  }
+});
+
+/**
+ * Build a repo where `name` was merged into origin/<default> but the local
+ * <default> was reset behind the merge, so plain `-d` refuses. The branch is
+ * never pushed, so it has no upstream for -d to fall back on.
+ */
+function remoteMergedStaleHeadRepo(name) {
+  const base = mkdtempSync(join(tmpdir(), "git-cleanup-test-"));
+  const bare = join(base, "origin.git");
+  const work = join(base, "work");
+  sh(null, ["init", "-q", "-b", "main", "--bare", bare]);
+  sh(null, ["clone", "-q", bare, work]);
+  sh(work, ["config", "user.name", "Test"]);
+  sh(work, ["config", "user.email", "test@example.com"]);
+  const now = Date.now();
+  commit(work, "main", { "README.md": "root" }, { msg: "initial" });
+  commit(work, name, { "old.txt": "1" }, { date: now - 60 * DAY, msg: "old work" });
+  merge(work, "main", name, { date: now - 30 * DAY });
+  sh(work, ["push", "-q", "origin", "main"]); // origin/main contains `name`
+  sh(work, ["reset", "-q", "--hard", "HEAD~1"]); // local HEAD now behind the merge
+  sh(work, ["remote", "set-head", "origin", "-a"]);
+  return { base, bare, work };
+}
+
+test("-d refusal falls back to -D with a backup (merged into remote base, not local HEAD)", async () => {
+  const r = remoteMergedStaleHeadRepo("feature/old");
+  try {
+    const cfg = defaults();
+    const repo = await analyzeRepo(r.work, cfg);
+    const old = byName(repo, "feature/old");
+    assert.equal(old.merged, true);
+    assert.equal(old.verdict, VERDICTS.DELETE);
+
+    const summary = await pruneRepo(repo, cfg, { yes: true });
+    assert.equal(summary.errors.length, 0, JSON.stringify(summary.errors));
+    assert.ok(summary.deletedLocal.includes("feature/old"));
+
+    // The forced deletion was backed up first: a -force bundle with the ref.
+    const bk = summary.backups.find((b) => b.file.endsWith("-force.bundle"));
+    assert.ok(bk, String(summary.backups.map((b) => b.file)));
+    assert.ok(
+      sh(r.work, ["bundle", "list-heads", bk.file]).out.includes("refs/heads/feature/old")
+    );
+
+    // The remote base is untouched and the local branch is gone.
+    const remoteHeads = sh(r.work, ["ls-remote", "--heads", "origin"]).out;
+    assert.ok(remoteHeads.includes("refs/heads/main"));
+    const names = listBranches(r.work, "heads").map((b) => b.name);
+    assert.ok(!names.includes("feature/old"));
+  } finally {
+    rmSync(r.base, { recursive: true, force: true });
+  }
+});
+
+test("-d fallback does not mask real refusals (branch checked out in a worktree)", async () => {
+  const r = remoteMergedStaleHeadRepo("feature/wt");
+  try {
+    // Check the branch out in a linked worktree: -d and -D both refuse.
+    const wtDir = join(r.base, "wt");
+    sh(r.work, ["worktree", "add", "-q", wtDir, "feature/wt"]);
+
+    const cfg = defaults();
+    const repo = await analyzeRepo(r.work, cfg);
+    const wt = byName(repo, "feature/wt");
+    assert.equal(wt.merged, true);
+    assert.equal(wt.verdict, VERDICTS.DELETE);
+
+    const summary = await pruneRepo(repo, cfg, { yes: true });
+    // Not silently deleted: the failure surfaces as an error and the branch
+    // (still checked out in the worktree) survives.
+    assert.equal(summary.errors.length, 1, JSON.stringify(summary.errors));
+    assert.match(summary.errors[0].error, /used by worktree/);
+    assert.ok(!summary.deletedLocal.includes("feature/wt"));
+    const names = listBranches(r.work, "heads").map((b) => b.name);
+    assert.ok(names.includes("feature/wt"));
+  } finally {
+    rmSync(r.base, { recursive: true, force: true });
   }
 });

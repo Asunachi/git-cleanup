@@ -41,7 +41,11 @@ export async function confirmed(label, defaultYes, opts) {
 // squash/rebase-merged branches (their SHAs are not in the base), and remote
 // push-deletes — first write the refs into a timestamped git bundle. Merged
 // local branches deleted with plain -d stay reachable from the base branch
-// and need no backup. Disable with config backup.enabled = false.
+// and need no backup — unless -d refuses (merged into a remote base but not
+// the local HEAD), in which case the branch is force-deleted behind a
+// safety bundle: the scan already proved its tip is an ancestor of a base
+// ref, and the bundle covers even that ref vanishing later.
+// Disable with config backup.enabled = false.
 
 function backupDir(repo, cfg) {
   const dir = cfg.backup?.dir;
@@ -123,23 +127,48 @@ function sweepRetention(repo, cfg) {
   return removed;
 }
 
-function deleteLocalBranches(repo, branches) {
+function deleteLocalBranches(repo, cfg, branches) {
   const done = [];
   const errors = [];
+  const backedUp = [];
   for (const b of branches) {
     const flag = b.merged ? "-d" : "-D";
     const r = git(["branch", flag, b.name], { cwd: repo.root });
-    if (r.ok) done.push(b.name);
-    else {
-      const detail = r.err || `git branch ${flag} failed`;
-      const hint =
-        flag === "-d"
-          ? " (not merged into the current HEAD — check out the base branch and re-run)"
-          : "";
-      errors.push({ name: b.name, error: detail + hint });
+    if (r.ok) {
+      done.push(b.name);
+      continue;
     }
+    if (flag === "-d") {
+      // Plain -d refused — typically because the branch is merged into a
+      // remote base branch but not into the local HEAD. The tool already
+      // proved b.merged via `for-each-ref --merged <base>`, so the commits
+      // stay reachable from the base ref; force-delete after writing a
+      // safety bundle (covers even a base ref that vanishes between the
+      // scan and the deletion). A failed backup aborts, nothing deleted.
+      const bk = backupBranches(repo, cfg, [b], "force");
+      if (bk.error) {
+        errors.push({
+          name: b.name,
+          error: `backup failed — nothing deleted: ${bk.error}`,
+        });
+        continue;
+      }
+      if (bk.file) {
+        backedUp.push({ file: bk.file, branches: [b.name] });
+      }
+      const r2 = git(["branch", "-D", b.name], { cwd: repo.root });
+      if (r2.ok) {
+        done.push(b.name);
+        continue;
+      }
+      // -D refused too (e.g. the branch is checked out in another worktree):
+      // report the real reason, not the -d one.
+      errors.push({ name: b.name, error: r2.err || "git branch -D failed" });
+      continue;
+    }
+    errors.push({ name: b.name, error: r.err || `git branch ${flag} failed` });
   }
-  return { done, errors };
+  return { done, errors, backedUp };
 }
 
 function deleteRemoteBranches(repo, branches) {
@@ -233,9 +262,23 @@ export async function pruneRepo(repo, cfg, opts = {}) {
   if (mergedLocal.length > 0) {
     const msg = `Delete ${plural(mergedLocal.length, "merged local branch")}?`;
     if (await confirmed(msg, true, opts)) {
-      const res = deleteLocalBranches(repo, mergedLocal);
+      const res = deleteLocalBranches(repo, cfg, mergedLocal);
       summary.deletedLocal.push(...res.done);
       summary.errors.push(...res.errors);
+      for (const bk of res.backedUp) {
+        summary.backups.push(bk);
+        printBackupNote(bk.file, "local");
+      }
+      if (res.backedUp.length > 0) {
+        console.log(
+          c.dim(
+            `  ${plural(
+              res.backedUp.length,
+              "branch"
+            )} needed force-deletion: -d refused (merged into a remote base, not the local HEAD); commits stay reachable from the base.`
+          )
+        );
+      }
     } else {
       console.log(c.dim("  skipped."));
     }
@@ -264,7 +307,7 @@ export async function pruneRepo(repo, cfg, opts = {}) {
           });
           printBackupNote(bk.file, "local");
         }
-        const res = deleteLocalBranches(repo, contentLocal);
+        const res = deleteLocalBranches(repo, cfg, contentLocal);
         summary.deletedLocal.push(...res.done);
         summary.errors.push(...res.errors);
       }
@@ -293,7 +336,7 @@ export async function pruneRepo(repo, cfg, opts = {}) {
           });
           printBackupNote(bk.file, "local");
         }
-        const res = deleteLocalBranches(repo, forceLocal);
+        const res = deleteLocalBranches(repo, cfg, forceLocal);
         summary.deletedLocal.push(...res.done);
         summary.errors.push(...res.errors);
       }
