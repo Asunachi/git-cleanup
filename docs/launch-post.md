@@ -86,12 +86,20 @@ two-line glob before you point it at your remote.
   that loses unique commits (squash merges, force rules, remote branches) it
   writes the refs into a **git bundle** first — one `git fetch` restores
   anything. Retention policy cleans up old bundles on a schedule.
+  If Git refuses a plain `-d` because a branch is merged into a remote base
+  but not your local `HEAD` — the stale-local-default-branch trap — the
+  tool doesn't dead-end and tell you to re-run later: it already proved the
+  tip is an ancestor of a base ref, so it writes the safety bundle and
+  force-deletes, and says so on the way out. The bundle is the answer to
+  "what if you're wrong?" — you aren't, and if you were, it's one `git
+  fetch` away.
 - **`prs`** — the stale-PR automator: lists and optionally closes PRs that
   have been silent for months.
 - **GitHub and GitLab** PR state cross-reference (`gh`, `GITHUB_TOKEN`, or
   `GITLAB_TOKEN`), degrading gracefully to pure-Git detection offline.
-- **Zero dependencies.** Node ≥ 18, the `git` binary, and nothing else. 54
-  tests, green on Linux, macOS, and Windows.
+- **Zero dependencies.** Node ≥ 18, the `git` binary, and nothing else. 61
+  tests, green on Linux, macOS, and Windows — including worktree, empty-repo,
+  and cross-platform path edge cases.
 
 ## Try it in 10 seconds
 
