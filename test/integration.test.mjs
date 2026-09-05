@@ -552,3 +552,42 @@ test("-d fallback does not mask real refusals (branch checked out in a worktree)
     rmSync(r.base, { recursive: true, force: true });
   }
 });
+
+test("remote branch already deleted on the server: prune the stale tracking ref instead of erroring", () => {
+  const f = fixture();
+  try {
+    // The server no longer has feature/merged-old2 (deleted in the web UI or
+    // by another machine) — only our stale local tracking ref remains.
+    sh(f.bare, ["update-ref", "-d", "refs/heads/feature/merged-old2"]);
+
+    const home = mkdtempSync(join(tmpdir(), "gc-home-"));
+    const env = { ...process.env, HOME: home, GIT_CLEANUP_NO_COLOR: "1" };
+    const r = spawnSync(
+      process.execPath,
+      [BIN, "prune", "--yes", "--remote", "--repo", f.work],
+      { cwd: ROOT, encoding: "utf8", env }
+    );
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    // The local merged branch was deleted normally; the remote branch was
+    // not pushed (already gone) but its stale tracking ref was pruned.
+    assert.match(r.stdout, /deleted 2 local branches/);
+    assert.match(r.stdout, /already gone on the server/);
+    assert.match(r.stdout, /pruned 1 stale remote ref/);
+
+    const remoteNames = listBranches(f.work, "remotes").map((b) => b.name);
+    assert.ok(!remoteNames.includes("origin/feature/merged-old2"));
+    // Still absent on the server, and the server's other refs are untouched.
+    const serverHeads = sh(f.bare, [
+      "for-each-ref",
+      "refs/heads",
+      "--format=%(refname:short)",
+    ]).out;
+    assert.ok(!serverHeads.includes("feature/merged-old2"));
+    assert.ok(serverHeads.includes("main"));
+    assert.ok(serverHeads.includes("release/v1"));
+    assert.ok(serverHeads.includes("wip/stale"));
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});

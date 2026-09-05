@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- When `git push --delete` fails because the branch was already deleted on
+  the server (web UI, another machine, an earlier run), `prune --remote` now
+  prunes the stale local tracking ref instead of reporting a dead-end error.
+  Whether the ref still exists is verified with `ls-remote` (not by parsing
+  git's localized error text), and only when `ls-remote` itself works — so
+  auth/network failures and refs that still exist (e.g. protected branches)
+  keep surfacing as real errors. The summary reports these as
+  `pruned N stale remote refs`.
+
 ## [0.2.6] - 2026-09-05
 
 ### Fixed

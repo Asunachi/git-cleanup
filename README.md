@@ -153,6 +153,11 @@ force-deletes it instead: the scan already proved its commits are reachable
 from the base, and the safety bundle covers even that ref disappearing
 later. A failed backup aborts the deletion.
 
+If `push --delete` fails because the branch was already deleted on the server
+(web UI, another machine, an earlier run), git-cleanup prunes the stale local
+tracking ref instead of reporting an error — verified with `ls-remote`, so
+auth/network failures and protected-branch refusals still surface as errors.
+
 Pass `--yes` (or set `GIT_CLEANUP_YES=1`) to run non-interactively. Remote
 deletion is `git push <remote> --delete <branch>`.
 

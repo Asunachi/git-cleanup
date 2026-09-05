@@ -173,6 +173,7 @@ function deleteLocalBranches(repo, cfg, branches) {
 
 function deleteRemoteBranches(repo, branches) {
   const done = [];
+  const pruned = [];
   const errors = [];
   const byRemote = new Map();
   for (const b of branches) {
@@ -185,15 +186,31 @@ function deleteRemoteBranches(repo, branches) {
       if (r.ok) {
         git(["branch", "-rd", `${remote}/${b.shortName}`], { cwd: repo.root });
         done.push(`${remote}/${b.shortName}`);
-      } else {
-        errors.push({
-          name: `${remote}/${b.shortName}`,
-          error: r.err || "git push --delete failed (network/auth?)",
-        });
+        continue;
       }
+      // push --delete failed. When the branch was already deleted on the
+      // server (web UI, another machine, an earlier run), the server state
+      // is already correct and only our stale tracking ref needs pruning.
+      // Verified with ls-remote rather than parsing git's error text, which
+      // is localized; and only when ls-remote itself works, so auth/network
+      // failures (or a still-existing ref — e.g. branch protection refusing
+      // the deletion) still surface as real errors.
+      const ls = git(
+        ["ls-remote", "--heads", remote, `refs/heads/${b.shortName}`],
+        { cwd: repo.root }
+      );
+      if (ls.ok && ls.out.trim() === "") {
+        git(["branch", "-rd", `${remote}/${b.shortName}`], { cwd: repo.root });
+        pruned.push(`${remote}/${b.shortName}`);
+        continue;
+      }
+      errors.push({
+        name: `${remote}/${b.shortName}`,
+        error: r.err || "git push --delete failed (network/auth?)",
+      });
     }
   }
-  return { done, errors };
+  return { done, pruned, errors };
 }
 
 /**
@@ -254,6 +271,7 @@ export async function pruneRepo(repo, cfg, opts = {}) {
     repo,
     deletedLocal: [],
     deletedRemote: [],
+    prunedRemote: [],
     backups: [],
     deletedBackups: removedBackups,
     errors: [],
@@ -362,7 +380,18 @@ export async function pruneRepo(repo, cfg, opts = {}) {
         }
         const res = deleteRemoteBranches(repo, remoteToDo);
         summary.deletedRemote.push(...res.done);
+        summary.prunedRemote.push(...res.pruned);
         summary.errors.push(...res.errors);
+        if (res.pruned.length > 0) {
+          console.log(
+            c.dim(
+              `  ⤳ ${plural(
+                res.pruned.length,
+                "remote branch"
+              )} already gone on the server — pruned the stale local tracking refs`
+            )
+          );
+        }
       }
     } else {
       console.log(c.dim("  skipped."));
