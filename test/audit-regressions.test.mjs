@@ -231,6 +231,37 @@ test("prune refuses -D when an ancestor-merged branch lost its base ref", async 
   }
 });
 
+test("prune names a vanished tracking ref in plain words when backups are on", async () => {
+  const f = fixture();
+  try {
+    const cfg = defaults(); // backups enabled (the default)
+    const repo = await analyzeRepo(f.work, cfg);
+    // The tracking ref vanishes between scan and prune (e.g. a fetch
+    // --prune in another terminal). The bundle step aborts the batch — it
+    // must say so in plain words, not with git's raw "ambiguous argument"
+    // trace, and nothing may be deleted.
+    sh(f.work, ["branch", "-rd", "origin/feature/merged-old2"]);
+
+    const summary = await pruneRepo(repo, cfg, { yes: true, remote: true });
+    assert.ok(
+      !summary.deletedRemote.includes("origin/feature/merged-old2"),
+      String(summary.deletedRemote)
+    );
+    const err = summary.errors.find((e) => e.name === "backup (remote)");
+    assert.ok(err, JSON.stringify(summary.errors));
+    assert.match(err.error, /origin\/feature\/merged-old2/);
+    assert.match(err.error, /no longer resolve/);
+    assert.match(err.error, /re-run scan/);
+    assert.doesNotMatch(err.error, /ambiguous argument/);
+    // The server branch is untouched.
+    const heads = sh(f.bare, ["for-each-ref", "refs/heads", "--format=%(refname:short)"]).out;
+    assert.ok(heads.includes("feature/merged-old2"));
+  } finally {
+    f.cleanup();
+    repos.pop();
+  }
+});
+
 test("prune refuses a remote delete when the tracking ref is gone", async () => {
   const f = fixture();
   try {

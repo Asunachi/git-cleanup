@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   base ref instead of once per matching tree occurrence, so histories
   where one tree repeats many times (e.g. `--allow-empty` chains) no
   longer spawn a small army of `git merge-base` processes per branch.
+- A ref that vanished between scan and prune (e.g. `git fetch --prune` in
+  another terminal) aborts the batch with a plain "N branches no longer
+  resolve (names) — re-run scan" instead of git's raw "ambiguous
+  argument" trace — nothing is deleted either way.
 
 - `git-cleanup sweep`: one pass over every configured repo — scan, prune
   by policy (`sweep.mode: "report"` never deletes — the default; `"prune"`

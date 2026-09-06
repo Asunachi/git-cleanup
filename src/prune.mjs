@@ -64,6 +64,18 @@ export function backupDir(repo, cfg) {
  */
 function backupBranches(repo, cfg, branches, tag) {
   if (cfg.backup?.enabled === false || branches.length === 0) return { file: null };
+  // A ref that vanished between scan and prune (fetch --prune, branch -D in
+  // another terminal) would make `git bundle create` fail with git's raw
+  // "ambiguous argument" trace. Name it in plain words instead, with the
+  // re-run hint; the caller aborts the batch, nothing is deleted.
+  const gone = branches.filter((b) => !resolveRef(repo.root, b.ref));
+  if (gone.length > 0) {
+    return {
+      error: `${plural(gone.length, "branch")} no longer resolve (${gone
+        .map((b) => b.name)
+        .join(", ")}) — re-run scan to re-judge`,
+    };
+  }
   const dir = backupDir(repo, cfg);
   try {
     mkdirSync(dir, { recursive: true });
