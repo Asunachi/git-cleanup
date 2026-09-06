@@ -6,9 +6,9 @@
 // Closing a pull request maps to the API's "decline" action (the standard
 // way to close one without merging), optionally with a comment.
 //
-// Bitbucket Server (self-hosted) exposes a different REST API, so only
-// bitbucket.org is claimed; self-hosted remotes degrade to pure git
-// detection like any unrecognized host.
+// Bitbucket Server (self-hosted, now "Data Center") exposes a different
+// REST API and has its own provider (src/providers/bitbucket-server.mjs);
+// this module claims bitbucket.org only.
 
 import { spawnSync } from "node:child_process";
 import { apiFetch, daysFromNowIso, fetchWithTimeout, ForgeError } from "../util.mjs";

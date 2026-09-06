@@ -84,6 +84,7 @@ Examples:
 
 Environment:
   GITHUB_TOKEN / GITLAB_TOKEN / BITBUCKET_TOKEN / GITEA_TOKEN  PR enrichment + report-issue
+  BITBUCKET_TOKEN       Cloud and Server/Data Center share one token
   GITLAB_API_BASE / BITBUCKET_API_BASE / GITEA_API_BASE  override API bases
   GITHUB_API_BASE / CI_API_V4_URL                 report-issue API base overrides
   CI_JOB_TOKEN                         GitLab report-issue fallback auth
@@ -152,7 +153,9 @@ async function cmdReportIssue(opts, file) {
   const found = providerFor(cwd, meta.remotes, hostMap);
   if (!found.provider) {
     console.error(
-      c.red("error: no supported forge remote found (providers: github, gitlab, bitbucket, gitea)")
+      c.red(
+        "error: no supported forge remote found (providers: github, gitlab, bitbucket, bitbucket-server, gitea)"
+      )
     );
     return 1;
   }

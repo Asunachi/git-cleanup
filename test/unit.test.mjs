@@ -323,7 +323,7 @@ test("forge.hosts config: normalized, defaults empty, unknown forges rejected", 
   );
   assert.throws(
     () => normalizeConfig({ forge: { hosts: { "git.example.com": "sourcehut" } } }),
-    /unknown forge "sourcehut" \(known: github, gitlab, bitbucket, gitea\)/
+    /unknown forge "sourcehut" \(known: github, gitlab, bitbucket, bitbucket-server, gitea\)/
   );
   assert.throws(() => normalizeConfig({ forge: { hosts: [] } }), /must be an object/);
   // Merging with defaults keeps forge.hosts present and empty by default.

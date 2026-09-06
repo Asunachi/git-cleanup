@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A 60-second walkthrough video (`demo.mp4`, H.264, 1280×720) embedded at
+  the top of the README. It is built from real terminal output captured on
+  a clone of facebook/react (969 branches, no token, git evidence only):
+  `scan` (198 prunable / 727 stale / 56 kept) → `prune` (bundle-safe,
+  11 squash/rebase branches backed up before deletion) → `backup list` →
+  `backup restore` (all 11 branches back at their exact commits, verified
+  by hash). A timed on-screen narration strip walks through each scene;
+  the frame generator renders from captured transcripts, so every line on
+  screen is real output.
+- A dedicated Homebrew tap repository, `homebrew-git-cleanup/` in this
+  tree — the content of `github.com/Asunachi/homebrew-git-cleanup` (tap
+  name `Asunachi/git-cleanup`). Homebrew taps must live in a
+  `homebrew-`-prefixed repository, so a formula inside this repo could
+  never actually be tapped (`brew tap user/repo` maps to
+  `user/homebrew-<repo>`); the formula now has its own home and this repo
+  ships no copy of it, so the two can't drift. The tap's
+  `update-formula` workflow (daily poll + manual dispatch, zero secrets)
+  rewrites the formula's version and sha256 from each new upstream
+  release, replacing the manual release chore. Install is unchanged:
+  `brew tap Asunachi/git-cleanup && brew install git-cleanup`.
+- A Bitbucket Server / Data Center forge provider behind the forge
+  contract, for self-hosted instances: `stash.internal`, `bitbucket.corp`,
+  or any host claimed via `forge.hosts` (`{ "stash.internal":
+  "bitbucket-server" }`). Hostnames containing `bitbucket` other than
+  `bitbucket.org` are assumed to be Server. It speaks the Server REST
+  dialect — `/rest/api/1.0`, `isLastPage`/`nextPageStart` pagination,
+  epoch-ms dates, `fromRef` branch keys, versioned declines for `prs
+  --close`, and a loud "no issues support" failure for report-issue (its
+  issues live in Jira). Server remotes authenticate with the same
+  `BITBUCKET_TOKEN` as Cloud, and `doctor` reports them correctly.
 - The GitHub Pages deploy (`pages.yml`) now runs on every `v*` release tag
   (in addition to `main` pushes and manual dispatch), so the playground at
   asunachi.github.io/git-cleanup always mirrors the latest published

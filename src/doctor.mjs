@@ -129,7 +129,11 @@ export function runDoctor({ cwd = process.cwd(), env = process.env, configFile =
         continue;
       }
       const claimed = Object.prototype.hasOwnProperty.call(hostMap, host);
-      const token = tokens.find((t) => t.forge === forge);
+      // bitbucket-server authenticates with the SAME BITBUCKET_TOKEN as
+      // Cloud, so its remote row reports against that token's entry.
+      const token =
+        tokens.find((t) => t.forge === forge) ??
+        (forge === "bitbucket-server" ? tokens.find((t) => t.forge === "bitbucket") : null);
       const missingToken = token && !token.set;
       remotes.push({
         name,

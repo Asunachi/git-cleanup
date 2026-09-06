@@ -54,8 +54,12 @@ runs as part of `npm test`, so a lint violation can never go green.
   `git-cleanup completions <shell>`; they ship in the npm tarball.
 - `support/dotfiles/` — the shell-hook and pre-commit snippets printed by
   `git-cleanup shell-hook <kind>`; also shipped in the npm tarball.
-- `Formula/git-cleanup.rb` — the Homebrew formula that makes this repo
-  tappable (`brew tap Asunachi/git-cleanup`).
+- `homebrew-git-cleanup/` — the dedicated Homebrew tap repository: the
+  formula plus its auto-update workflow (`update-formula.sh`, scheduled
+  daily in `.github/workflows/update-formula.yml`). The directory is the
+  content of `github.com/Asunachi/homebrew-git-cleanup` (tap name
+  `Asunachi/git-cleanup`); push it there as its own repo. This repository
+  deliberately ships no formula of its own, so the two can't drift.
 - `scripts/sync-playground.mjs` — bundles `src/engine.mjs` into `index.html`
   (run `npm run sync:playground` after editing the engine).
 - `index.html` — a standalone documentation page with interactive demos that
@@ -122,12 +126,20 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
    update every GitHub Action pin to the new tag: the README example
    (`scan-report@vX.Y.Z`), `docs/launch-post.md`, and `docs/marketplace.md`
    wherever they show one. The pins must land in the release tree so the
-   tag itself carries them. Also update the Homebrew formula
-   (`Formula/git-cleanup.rb`): bump `version` and replace `sha256` with the
-   digest of the published tarball, computed AFTER publishing from the
-   registry artifact (`npm pack @maliqkara/gitcleanup@<v> --pack-destination
-   /tmp && shasum -a 256 /tmp/maliqkara-gitcleanup-<v>.tgz`), and verify it
-   with `brew install --build-from-source ./Formula/git-cleanup.rb`.
+   tag itself carries them. There is **no Homebrew step for the live tap**:
+   the formula lives in the dedicated tap repo
+   (`Asunachi/homebrew-git-cleanup`), whose `update-formula` workflow
+   bumps it to each release on a daily poll. To make a fresh release
+   available to `brew` users immediately, run that workflow manually
+   (Actions → update-formula → Run workflow) right after tagging.
+
+   The *seed* in this repo (`homebrew-git-cleanup/Formula/git-cleanup.rb`)
+   still needs re-seeding so the scaffold stays accurate: bump its version
+   to match and replace `sha256` with the digest of the published tarball
+   (`npm pack @maliqkara/gitcleanup@<v> --pack-destination /tmp && shasum
+   -a 256 /tmp/maliqkara-gitcleanup-<v>.tgz`). The parity test
+   (`test/homebrew-tap.test.mjs`) enforces the version; the digest keeps the
+   seed installable until the tap's own workflow next runs.
 2. Run `npm publish --dry-run` first: the `files` field keeps the tarball to
    `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
    before anything goes out.

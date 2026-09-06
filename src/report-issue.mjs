@@ -8,6 +8,8 @@
 //   - gitlab:    GITLAB_TOKEN (PRIVATE-TOKEN),  base: GITLAB_API_BASE | CI_API_V4_URL | https://<host>/api/v4
 //                CI_JOB_TOKEN (JOB-TOKEN) fallback
 //   - bitbucket: BITBUCKET_TOKEN (Bearer)       base: BITBUCKET_API_BASE | https://api.bitbucket.org/2.0
+//   - bitbucket-server: no issues capability: Bitbucket Server has no native
+//                issue tracker (issues live in Jira) — posting fails loudly
 //   - gitea:     GITEA_TOKEN (token)            base: GITEA_API_BASE | https://<host>/api/v1
 //
 // ALL forge-specific knowledge — token, endpoints, pagination dialect,

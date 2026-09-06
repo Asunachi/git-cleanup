@@ -17,7 +17,7 @@
 //       error: string | null,
 //     },
 //     closePR({owner, repo, source, pr, comment}),
-//     issues: {                            // required: report-issue posts
+//     issues: {   // REQUIRED only for forges WITH a native issue tracker:
 //       context(remoteUrl, env) -> {forge, apiBase, webBase, owner, repo,
 //                                   project?, headers}  // throws ForgeError
 //       findIssue(ctx, title)     -> {title, number, url} | null,
@@ -25,6 +25,8 @@
 //       updateIssue(ctx, number, body) -> {number, url},
 //       previewUrl(ctx, title) -> string,   // where a created issue would live
 //     },
+//     // A forge without one (Bitbucket Server: issues live in Jira) simply
+//     // omits `issues`; report-issue on it throws a loud ForgeError.
 //   }
 //
 // Every PR (whatever the forge) shares one shape:
@@ -37,21 +39,29 @@
 // register it below.
 //
 // Remote detection is by hostname heuristic: github.com / gitlab.com /
-// *.gitlab.* self-hosted instances / bitbucket.org / gitea.com +
-// codeberg.org + forgejo.org (Gitea-family hosts; arbitrary self-hosted
-// Gitea domains have no distinctive hostname and are not claimed). The
-// `forge.hosts` config map claims extra hostnames explicitly (e.g.
-// { "git.example.com": "gitlab", "git.internal": "gitea" }) and always
-// wins over the heuristics; it is threaded through as `hostMap` by every
-// detection and parsing entry point. A forge host with no registered
-// provider yields source "none" with a helpful error rather than a hard
-// failure.
+// *.gitlab.* self-hosted instances / bitbucket.org (Cloud) / hosts whose
+// name contains "bitbucket" but is not bitbucket.org (assumed Bitbucket
+// Server) / gitea.com + codeberg.org + forgejo.org (Gitea-family hosts;
+// arbitrary self-hosted Gitea domains have no distinctive hostname and are
+// not claimed). The `forge.hosts` config map claims extra hostnames
+// explicitly (e.g. { "git.example.com": "gitlab", "git.internal":
+// "gitea", "stash.internal": "bitbucket-server" }) and always wins over
+// the heuristics; it is threaded through as `hostMap` by every detection
+// and parsing entry point. A forge host with no registered provider yields
+// source "none" with a helpful error rather than a hard failure.
+//
+// The `issues` capability is required only for forges WITH a native issue
+// tracker. Bitbucket Server has none (issues live in Jira), so its
+// provider ships no `issues`; `report-issue` on such a remote throws a
+// loud ForgeError ("no issues support") before any network call — posting
+// without knowing where is never silently skipped.
 
 import { spawnSync } from "node:child_process";
 import { ForgeError } from "./util.mjs";
 import { githubProvider } from "./providers/github.mjs";
 import { gitlabProvider } from "./providers/gitlab.mjs";
 import { bitbucketProvider } from "./providers/bitbucket.mjs";
+import { bitbucketServerProvider } from "./providers/bitbucket-server.mjs";
 import { giteaProvider } from "./providers/gitea.mjs";
 
 // ForgeError lives in util.mjs (providers throw it too, without importing
@@ -63,6 +73,7 @@ export const providers = {
   github: githubProvider,
   gitlab: gitlabProvider,
   bitbucket: bitbucketProvider,
+  "bitbucket-server": bitbucketServerProvider,
   gitea: giteaProvider,
 };
 
@@ -89,7 +100,11 @@ export function detectForge(url, hostMap = {}) {
   if (Object.prototype.hasOwnProperty.call(hostMap, host)) return hostMap[host];
   if (host === "github.com") return "github";
   if (host.includes("gitlab")) return "gitlab"; // gitlab.com + self-hosted
-  if (host === "bitbucket.org") return "bitbucket"; // Cloud only (Server has a different API)
+  if (host === "bitbucket.org") return "bitbucket"; // Cloud
+  // A host containing "bitbucket" but not bitbucket.org is almost certainly
+  // a self-hosted Server/Data Center instance (bitbucket.corp.com,
+  // bitbucket.example.org); arbitrary names are claimed via forge.hosts.
+  if (host.includes("bitbucket")) return "bitbucket-server";
   // Gitea-family hosts: gitea.com + the big Gitea/Forgejo instances. Other
   // self-hosted Gitea domains have no distinctive hostname to detect.
   if (host === "gitea.com" || host === "codeberg.org" || host === "forgejo.org") {

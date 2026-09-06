@@ -1,0 +1,42 @@
+name: update-formula
+
+# Auto-bump Formula/git-cleanup.rb whenever the upstream git-cleanup project
+# releases a new version, so `brew tap Asunachi/git-cleanup` always serves
+# the latest published npm tarball.
+#
+# The upstream repo (Asunachi/git-cleanup) cannot trigger this workflow
+# directly without a cross-repo token, so this poll runs on a schedule:
+# every day at 04:17 UTC the latest release of Asunachi/git-cleanup is
+# compared with the formula's version, and a newer release bumps url +
+# sha256 and pushes the commit. Run it manually (workflow_dispatch) to pull
+# a fresh release immediately instead of waiting for the next poll.
+#
+# No secrets are needed: the push uses this repository's automatic
+# GITHUB_TOKEN (contents: write), and reading the upstream repo's public
+# releases requires no authentication. The heavy lifting lives in
+# ./update-formula.sh so the same logic is reviewable and testable locally.
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-formula
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Bump the formula to the latest git-cleanup release
+        shell: bash
+        run: ./update-formula.sh
+        env:
+          UPSTREAM_REPO: Asunachi/git-cleanup
+          BRANCH: ${{ github.ref_name }}

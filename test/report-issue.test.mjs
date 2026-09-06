@@ -66,14 +66,23 @@ function makeRepo(t, remoteUrl) {
 
 // ---- provider contract -------------------------------------------------------
 
-test("every registered forge implements the issues capability", () => {
+test("issues capability: present on every forge with a native tracker, absent = loud failure", () => {
   for (const [id, p] of Object.entries(providers)) {
     assert.equal(p.id, id, `${id}: provider keyed by its id`);
-    assert.ok(p.issues, `${id}: issues capability present`);
-    for (const method of ["context", "findIssue", "createIssue", "updateIssue", "previewUrl"]) {
-      assert.equal(typeof p.issues[method], "function", `${id}: issues.${method}`);
+    if (p.issues) {
+      for (const method of ["context", "findIssue", "createIssue", "updateIssue", "previewUrl"]) {
+        assert.equal(typeof p.issues[method], "function", `${id}: issues.${method}`);
+      }
     }
   }
+  // Bitbucket Server has no native issue tracker (issues live in Jira): it
+  // ships no issues capability, and report-issue on such a remote throws a
+  // loud, specific error before any network call — never a silent skip.
+  assert.equal(providers["bitbucket-server"].issues, undefined);
+  assert.throws(
+    () => resolveForgeContext("https://bitbucket.corp/scm/PROJ/repo.git", { BITBUCKET_TOKEN: "bt" }),
+    /forge "bitbucket-server" has no issues support/
+  );
 });
 
 test("resolveForgeContext dispatches each remote through its provider's issues", () => {

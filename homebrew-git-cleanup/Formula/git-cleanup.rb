@@ -1,16 +1,16 @@
-# Homebrew formula for git-cleanup.
+# Homebrew formula for git-cleanup, in its dedicated tap repository
+# (Asunachi/homebrew-git-cleanup; `brew tap Asunachi/git-cleanup`).
 #
-# This repository doubles as a Homebrew tap: `brew tap Asunachi/git-cleanup`
-# then `brew install git-cleanup`. The formula installs the exact npm tarball
-# that npm serves for the pinned version.
+# This file is AUTO-UPDATED by .github/workflows/update-formula.yml in this
+# repository: on a schedule (and on demand via workflow_dispatch) it reads the
+# latest release tag of Asunachi/git-cleanup, downloads the exact npm tarball
+# that release publishes, and rewrites `url` and `sha256` below. Do not hand-
+# edit version or sha256 — the next run will overwrite them.
 #
-# On release (see CONTRIBUTING.md): bump `version` and replace `sha256` with
-# the published tarball's digest:
-#
+# Manual bump, if you ever need one without the workflow:
 #   npm pack @maliqkara/gitcleanup@<new-version> --pack-destination /tmp
 #   shasum -a 256 /tmp/maliqkara-gitcleanup-<new-version>.tgz
-#
-# Then re-verify with `brew install --build-from-source ./Formula/git-cleanup.rb`.
+# Then verify with `brew install --build-from-source ./Formula/git-cleanup.rb`.
 
 class GitCleanup < Formula
   desc "Prune stale/merged Git branches, cross-referenced with PR status"

@@ -8,12 +8,14 @@
 A zero-dependency CLI that keeps your Git workspace pristine: it scans local
 and remote branches, cross-references each branch's activity (last commit,
 merge status, upstream state) with its pull-request status on GitHub,
-GitLab, Bitbucket, and Gitea-family forges, then safely prunes what is
+GitLab, Bitbucket (Cloud and self-hosted Server/Data Center), and
+Gitea-family forges, then safely prunes what is
 genuinely dead — merged branches past an age threshold, abandoned remote
 branches, and scratch branches you opted into deleting.
 
 Built on the `git` binary only (never touches `.git` internals) with optional
-GitHub, GitLab, Bitbucket, and Gitea enrichment via `gh` CLI or a
+GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea enrichment via
+`gh` CLI or a
 `GITHUB_TOKEN`/`GITLAB_TOKEN`/`BITBUCKET_TOKEN`/`GITEA_TOKEN`. Requires
 **Node.js ≥ 18**, zero npm dependencies.
 
@@ -34,10 +36,12 @@ GitHub, GitLab, Bitbucket, and Gitea enrichment via `gh` CLI or a
 - [Limitations & roadmap](#limitations--roadmap)
 
 <p align="center">
-  <img src="demo.gif" alt="git-cleanup in a real terminal: scan, prune with bundles, backup list, restore — 5-second loop" width="92%" />
+  <video src="demo.mp4" controls preload="metadata" width="92%" poster="demo.gif" aria-label="60-second walkthrough of git-cleanup: scan, prune, backup list, and restore on facebook/react">
+    <a href="demo.mp4">Watch the 60-second walkthrough (demo.mp4)</a>
+  </video>
   <br />
-  <em>the real CLI, no cuts: <code>scan</code> → <code>prune</code> (bundles everything first) →
-  <code>backup list</code> → <code>backup restore</code></em>
+  <em>the 60-second walkthrough, real terminal output on <code>facebook/react</code>, no cuts:
+  <code>scan</code> → <code>prune</code> (bundles everything first) → <code>backup list</code> → <code>backup restore</code></em>
 </p>
 
 <p align="center">
@@ -71,10 +75,13 @@ the CLI command stays `git-cleanup`.
 | From source | `git clone https://github.com/Asunachi/git-cleanup.git && cd git-cleanup && node bin/git-cleanup.mjs scan` |
 
 Pin `@latest` when using `npx` — npm ≥ 11's `npx` needs the explicit
-version to resolve a scoped package's bin. The Homebrew formula installs the
-exact npm tarball of the pinned release (kept in `Formula/git-cleanup.rb`,
-updated on every release). There is no build step and no `npm install` for
-any method: the tool runs on Node built-ins only.
+version to resolve a scoped package's bin. The Homebrew formula lives in a
+dedicated tap repository,
+[Asunachi/homebrew-git-cleanup](https://github.com/Asunachi/homebrew-git-cleanup),
+and is kept current automatically: that repo's `update-formula` workflow
+bumps it to each new release (daily poll, no secrets). There is no build
+step and no `npm install` for any method: the tool runs on Node built-ins
+only.
 
 Then, inside any git repository:
 
@@ -350,8 +357,8 @@ git-cleanup queries GitHub, in order:
 
 Without either, PR columns show `-` and cleanup falls back to pure git merge
 detection (this is what runs in the tests and works fully offline). Only
-GitHub, GitLab, Bitbucket, and Gitea-family remotes are queried (see
-"Forge support"); other remotes are ignored.
+GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea-family remotes
+are queried (see "Forge support"); other remotes are ignored.
 
 **Truncation is never silent.** PR lists are fetched in pages; very large
 repositories (over the fetch cap — currently 2,000 PRs via any REST API,
@@ -580,8 +587,9 @@ green.
 
 ## Limitations & roadmap
 
-* Bitbucket **Server** (self-hosted) remotes work for git-based cleanup; PR
-  enrichment is skipped until that API lands.
+* Bitbucket Server/Data Center has **no native issue tracker** (issues live
+  in Jira), so `report-issue` on a Server remote fails loudly — PR
+  enrichment and `prs --close` work fine.
 * Age is measured from the tip commit of each branch.
 * PR lists are fetched up to a safety cap (2,000 via REST, 500 via `gh`);
   hitting the cap is reported, never silent (see “GitHub integration”).
@@ -599,12 +607,14 @@ requests keyed by head branch (`loadPRs`), and close one with a comment
 that common shape, so a new forge is a new `src/providers/<forge>.mjs` plus
 one registry line, no changes in `analyze`/`classify`/`report`/`cli`/the
 Action. Remotes are detected by hostname: `github.com`, `gitlab.com` (plus
-self-hosted `*.gitlab.*` instances), `bitbucket.org`, and the Gitea-family
-hosts `gitea.com`, `codeberg.org`, and `forgejo.org` resolve to their
-providers; unrecognized hosts degrade to pure-git cleanup with a clear
-message. The `forge.hosts` config map claims extra hostnames explicitly
-(for example `{ "git.example.com": "gitlab", "git.internal": "gitea" }`)
-for self-hosted instances on custom domains — it always wins over the
+self-hosted `*.gitlab.*` instances), `bitbucket.org` (Cloud), hostnames
+containing `bitbucket` other than `bitbucket.org` (assumed Bitbucket
+Server/Data Center), and the Gitea-family hosts `gitea.com`, `codeberg.org`,
+and `forgejo.org` resolve to their providers; unrecognized hosts degrade to
+pure-git cleanup with a clear message. The `forge.hosts` config map claims
+extra hostnames explicitly (for example `{ "git.example.com": "gitlab",
+"git.internal": "gitea", "stash.internal": "bitbucket-server" }`) for
+self-hosted instances on custom domains — it always wins over the
 heuristics and is honored by PR tracking and `report-issue` alike.
 
 ### Gitea / Codeberg / Forgejo
@@ -626,7 +636,7 @@ Forgejo instances on arbitrary domains can't be recognized by hostname
 the API base `https://<host>/api/v1` (standard install layout) or honors
 `GITEA_API_BASE`.
 
-### Bitbucket
+### Bitbucket Cloud
 
 Pull requests are read over the Bitbucket Cloud REST API (`state=OPEN` +
 `MERGED` + `DECLINED` + `SUPERSEDED`, sorted by `-updated_on`), keyed by
@@ -640,8 +650,34 @@ git detection. The API base defaults to `https://api.bitbucket.org/2.0`
 (override with `BITBUCKET_API_BASE`). Closing a PR (`prs --close`) uses
 `POST .../pullrequests/:id/decline` — the API's standard close-without-merge
 action — and posts the comment to `.../pullrequests/:id/comments`.
-Bitbucket Server (self-hosted) exposes a different API and is not claimed;
-those remotes degrade to pure-git cleanup.
+
+### Bitbucket Server / Data Center
+
+Self-hosted Bitbucket Server (now "Data Center") speaks a **different REST
+API** under `/rest/api/1.0`, so it has its own provider behind the same
+contract. A hostname containing `bitbucket` that is not `bitbucket.org` is
+assumed to be a Server instance (`bitbucket.corp.com`,
+`bitbucket.example.org`); arbitrary domains are claimed with `forge.hosts`
+(`{ "stash.internal": "bitbucket-server" }`). Clone URLs —
+`https://<host>/scm/PROJ/repo.git`, `ssh://git@<host>:7999/PROJ/repo.git`,
+scp-like `git@<host>:PROJ/repo.git` — parse to a **project key + repo slug**
+(Bitbucket Server projects have exactly one level, no nested groups). The
+API base derives as `https://<host>/rest/api/1.0` (override with
+`BITBUCKET_API_BASE`, shared with Cloud). Pull requests are read from
+`GET .../projects/{key}/repos/{slug}/pull-requests` with the same four
+states as Cloud, keyed by `fromRef.displayId`, with `start`-cursor
+pagination (`isLastPage`/`nextPageStart`) and the same 2,000-item
+pagination cap reported as `truncated`. Dates arrive as epoch **milliseconds**
+and are converted to the shared ISO shape. Authentication is the same
+`BITBUCKET_TOKEN` env var sent as `Authorization: Bearer` (a Data Center
+personal access token). Closing a PR (`prs --close`) posts to
+`.../pull-requests/:id/decline?version={version}` — Server declines are
+optimistic-locked, so the loaded version is passed along and a concurrent
+edit surfaces as an API error instead of a silent close — and comments use
+Server's `{ "text": ... }` body. Bitbucket Server has **no native issue
+tracker** (that is Jira's job), so this provider ships no `issues`
+capability and `git-cleanup report-issue` on a Server remote fails loudly
+rather than guessing an endpoint.
 
 ### GitLab
 
@@ -674,8 +710,9 @@ CI/CD → Job token permissions). The GitHub twin of that job is
 `git-cleanup report-issue` command (posts with the automatic
 `GITHUB_TOKEN`, no `gh` binary needed) — the command detects the forge
 from the remote, so the identical invocation works on GitHub, GitLab,
-Bitbucket, and Gitea, and `--dry-run` rehearses the post (read-only
-search resolves create-vs-update, only the write is skipped). Both
+Bitbucket Cloud, and Gitea (forges without a native issue tracker, like
+Bitbucket Server, fail loudly), and `--dry-run` rehearses the post
+(read-only search resolves create-vs-update, only the write is skipped). Both
 scheduled report jobs rehearse with `--dry-run` before posting, so a
 broken token or API change fails the run loudly instead of silently
 skipping the report. Copy
@@ -686,10 +723,10 @@ if you want the scan job's PR enrichment.
 
 Roadmap, in order of expected value:
 
-1. **Bitbucket Server** (self-hosted) PR enrichment — its REST API (under
-   `/rest/api/`) differs from Cloud's; everything else already treats
-   remotes generically (its hostnames can already be claimed with
-   `forge.hosts` if the API ever matches).
-2. **A dedicated Homebrew tap repository** — this repo already works as a
-   tap (`brew tap Asunachi/git-cleanup`); a standalone tap would version
-   the formula independently of the app repository.
+1. **A dedicated Homebrew tap repository** — *done*: the formula now lives
+   in its own repo (`Asunachi/homebrew-git-cleanup`; tap name
+   `Asunachi/git-cleanup`), auto-updated by that repo's release workflow;
+   this repository no longer ships a formula.
+2. **A hosted demo of the scheduled report issue** — point the report
+   workflows at a public repo so the weekly `git-cleanup: branch report`
+   issue is visible as living proof.

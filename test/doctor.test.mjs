@@ -120,6 +120,30 @@ test("doctor: CI_JOB_TOKEN counts as the GitLab token", () => {
   }
 });
 
+test("doctor: a bitbucket-server remote reports against the shared BITBUCKET_TOKEN", () => {
+  const dir = mkRepo("https://bitbucket.corp/scm/PROJ/repo.git");
+  try {
+    const bare = runDoctor({ cwd: dir, env: {}, homeFile: NO_HOME, spawn: stubSpawn(GH_MISSING) });
+    const remote = bare.repo.remotes[0];
+    assert.equal(remote.forge, "bitbucket-server");
+    assert.equal(remote.status, "warn");
+    // Server shares Cloud's token env var: the warning must name it.
+    assert.match(remote.message, /no BITBUCKET_TOKEN set/);
+    assert.match(remote.message, /bitbucket-server/);
+
+    const withToken = runDoctor({
+      cwd: dir,
+      env: { BITBUCKET_TOKEN: "bt" },
+      homeFile: NO_HOME,
+      spawn: stubSpawn(GH_MISSING),
+    });
+    assert.equal(withToken.repo.remotes[0].status, "ok");
+    assert.equal(withToken.counts.warn, 4); // gh + github/gitlab/gitea tokens
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("doctor: unrecognized remote warns with a forge.hosts hint; claiming fixes it", () => {
   const dir = mkRepo("git@git.internal:team/repo.git");
   try {
