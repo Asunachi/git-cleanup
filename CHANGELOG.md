@@ -44,6 +44,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release. Before deploying it regenerates `index.html` from
   `src/engine.mjs` and refuses to publish a page that drifted from the
   committed bundle — the same freshness gate CI enforces per PR.
+- A one-button **release workflow** (`.github/workflows/release.yml`,
+  manual dispatch) that runs the full test suite, bumps `package.json` and
+  re-seeds the tap formula scaffold (`support/release/bump-version.mjs`:
+  semver math, a tag-reuse guard, and the sha256 of the packed release
+  tree), tags and pushes `vX.Y.Z`, publishes the GitHub Release, and files
+  the Homebrew tap update as a reviewable pull request (the tap updater's
+  new `RELEASE_PR` mode — bump on `release-<tag>`, push, open/confirm the
+  PR, never forked or duplicated on re-runs). A `dry_run` input rehearses
+  the whole pipeline without changing anything. The tap updater now also
+  re-verifies the pinned `sha256` against the release tarball on every run
+  and re-pins it if it drifted, so a release published from a different
+  tree can never leave `brew install` with a stale checksum.
 
 ## [0.3.0] - 2026-09-06
 

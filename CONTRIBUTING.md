@@ -56,10 +56,20 @@ runs as part of `npm test`, so a lint violation can never go green.
   `git-cleanup shell-hook <kind>`; also shipped in the npm tarball.
 - `homebrew-git-cleanup/` — the dedicated Homebrew tap repository: the
   formula plus its auto-update workflow (`update-formula.sh`, scheduled
-  daily in `.github/workflows/update-formula.yml`). The directory is the
-  content of `github.com/Asunachi/homebrew-git-cleanup` (tap name
+  daily in `.github/workflows/update-formula.yml`, plus a `RELEASE_PR=1`
+  mode that bumps on a branch and files a pull request). The directory is
+  the content of `github.com/Asunachi/homebrew-git-cleanup` (tap name
   `Asunachi/git-cleanup`); push it there as its own repo. This repository
   deliberately ships no formula of its own, so the two can't drift.
+- `support/release/bump-version.mjs` — the dependency-free version-bump
+  engine behind the `release` workflow: semver math (patch/minor/major or
+  `exact=`), a tag-reuse guard, and the tap-formula re-seed whose sha256
+  comes from `npm pack` of the release tree.
+- `.github/workflows/release.yml` — the one-button release pipeline
+  (manual dispatch): test suite → bump → tag → push → GitHub Release →
+  tap PR. Its shape is pinned by `test/release-workflow.test.mjs`; the
+  bump engine by `test/release.test.mjs`; the tap updater's release modes
+  by `test/tap-pr-mode.test.mjs`.
 - `scripts/sync-playground.mjs` — bundles `src/engine.mjs` into `index.html`
   (run `npm run sync:playground` after editing the engine).
 - `index.html` — a standalone documentation page with interactive demos that
@@ -117,60 +127,74 @@ name `git-cleanup` is held by an unrelated project and npm blocks
 lookalikes); the CLI command stays `git-cleanup`. npm history starts at
 0.2.0; `CHANGELOG.md` and `package.json` always carry the same version.
 
+Releases are driven by the **`release` workflow**
+(`.github/workflows/release.yml`, manual dispatch only — releases are
+deliberate acts). It runs the full test suite, bumps the version, tags and
+pushes, publishes the GitHub Release, and files the Homebrew tap update as
+a pull request. A `dry_run` input rehearses the entire pipeline without
+changing anything.
+
 Publishing requires an npm account token with 2FA bypass (npmjs.com →
 Access Tokens → *Granular Access Token*, scoped to the package, with the
 2FA-bypass option ticked) when the account has two-factor auth enabled.
 
-1. Bump the version in `package.json` (semver), move the matching
-   `[Unreleased]` content in `CHANGELOG.md` into a dated release entry, and
-   update every GitHub Action pin to the new tag: the README example
+1. Write the release notes first: move the matching `[Unreleased]` content
+   in `CHANGELOG.md` into a dated entry and commit it, and update every
+   GitHub Action pin to the new tag in the same commit: the README example
    (`scan-report@vX.Y.Z`), `docs/launch-post.md`, and `docs/marketplace.md`
    wherever they show one. The pins must land in the release tree so the
-   tag itself carries them. There is **no Homebrew step for the live tap**:
-   the formula lives in the dedicated tap repo
-   (`Asunachi/homebrew-git-cleanup`), whose `update-formula` workflow
-   bumps it to each release on a daily poll. To make a fresh release
-   available to `brew` users immediately, run that workflow manually
-   (Actions → update-formula → Run workflow) right after tagging.
+   tag itself carries them.
+2. Dispatch the **release** workflow (Actions → release → Run workflow)
+   with `version_bump` (patch/minor/major) or `exact_version` — or
+   `dry_run: true` first to rehearse. The workflow:
+   - runs `npm test`;
+   - bumps `package.json` and re-seeds the tap formula scaffold
+     (`support/release/bump-version.mjs`; the sha256 comes from `npm pack`
+     of the release tree — deterministic and byte-identical to the
+     registry artifact, and re-verified by the tap's daily poll);
+   - commits `Release X.Y.Z`, tags `vX.Y.Z` (annotated), and pushes both
+     — which triggers `release-check` and the Pages deploy automatically;
+   - creates the GitHub Release from the tag;
+   - files the tap PR against `Asunachi/homebrew-git-cleanup` via the
+     tap's own `update-formula.sh` in PR mode (`RELEASE_PR=1`), hashing
+     the release tree directly since the npm artifact doesn't exist on the
+     registry until step 4.
 
-   The *seed* in this repo (`homebrew-git-cleanup/Formula/git-cleanup.rb`)
-   still needs re-seeding so the scaffold stays accurate: bump its version
-   to match and replace `sha256` with the digest of the published tarball
-   (`npm pack @maliqkara/gitcleanup@<v> --pack-destination /tmp && shasum
-   -a 256 /tmp/maliqkara-gitcleanup-<v>.tgz`). The parity test
-   (`test/homebrew-tap.test.mjs`) enforces the version; the digest keeps the
-   seed installable until the tap's own workflow next runs.
-2. Run `npm publish --dry-run` first: the `files` field keeps the tarball to
-   `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
-   before anything goes out.
-3. `npm publish` runs `prepublishOnly` (`npm test`) and refuses to proceed if
-   any test fails.
-4. Tag the release at the exact commit whose tree npm published (normally the
-   bump commit just created) and push the tag explicitly:
+   The tap-PR step needs the **`TAP_REPO_TOKEN`** repository secret: a
+   fine-grained PAT with *Contents: Read and write* + *Pull requests: Read
+   and write* on `Asunachi/homebrew-git-cleanup` only (a full-scope PAT
+   works but is not recommended). Set it once:
 
    ```bash
-   git tag -a vX.Y.Z -m "Release vX.Y.Z: <one-line summary>"   # tags HEAD
-   git push origin vX.Y.Z
+   gh secret set TAP_REPO_TOKEN --repo Asunachi/git-cleanup
    ```
 
-   If `main` has drifted past the published version, tag the bump commit
-   itself rather than latest `main`, so the tag matches the npm artifact
-   (`git rev-parse vX.Y.Z^{commit}` must equal the bump commit). The release
-   tag is also what consumers pin for the GitHub Action, so a version whose
-   tree lacks a feature must not be presented as carrying it.
+   Without it the workflow fails at the tap checkout — loudly, before
+   anything is pushed.
+3. `npm publish --dry-run` first: the `files` field keeps the tarball to
+   `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
+   before anything goes out.
+4. `npm publish` runs `prepublishOnly` (`npm test`) and refuses to proceed
+   if any test fails. The workflow tags the bump commit, so the tag already
+   points at the exact tree npm publishes; if `main` has drifted past the
+   published version instead, tag the bump commit itself and push the tag
+   explicitly so it matches the npm artifact (`git rev-parse vX.Y.Z^{commit}`
+   must equal the bump commit). The release tag is also what consumers pin
+   for the GitHub Action, so a version whose tree lacks a feature must not
+   be presented as carrying it.
 5. **Verify the tarball on every OS before announcing the release.** The
    `release-check` workflow (`.github/workflows/release-check.yml`) runs
    automatically when the `v*` tag is pushed: it packs the exact tree the
    tag points at, installs the tarball into a temp prefix, and runs the
    installed CLI (`--version`, `--help`, and a real `scan --check`) on
    Linux, macOS, and Windows. Wait for all three jobs to pass before
-   creating the GitHub Release. To check a tree *before* publishing (or to
-   re-run), use Actions → **release-check** → *Run workflow* on any branch.
-6. Create a GitHub Release for the tag with notes from the matching
-   CHANGELOG entry and a link to the npm package
-   (https://www.npmjs.com/package/@maliqkara/gitcleanup). If the action is
-   published on the GitHub Marketplace, the listing updates automatically
-   from the new tag — nothing to resubmit (see `docs/marketplace.md`).
+   announcing. To check a tree *before* publishing (or to re-run), use
+   Actions → **release-check** → *Run workflow* on any branch.
+6. Merge the tap PR (or close it — the tap's daily poll picks the release
+   up on its own; the PR exists so releases are reviewable before `brew`
+   users get them). If the action is published on the GitHub Marketplace,
+   the listing updates automatically from the new tag — nothing to
+   resubmit (see `docs/marketplace.md`).
 
 ### Tagging past releases
 

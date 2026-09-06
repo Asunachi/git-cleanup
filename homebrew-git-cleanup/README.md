@@ -42,7 +42,10 @@ poll: **Actions → update-formula → Run workflow** in this repository.
    when one is supplied. Tags drive the bump (the project releases by tag);
    GitHub Release objects are optional and not required.
 2. It compares that version against the formula's current one and does
-   nothing when the formula is already current or newer.
+   nothing when the formula is already current or newer. When the formula
+   already carries the target version, it re-verifies the pinned `sha256`
+   against the release tarball and re-pins it if the digest drifted — a
+   stale checksum can never outlive a release.
 3. Otherwise it downloads the npm tarball that release publishes and
    replaces `url` + `sha256` in the formula.
 4. It commits (`git-cleanup X.Y.Z`) and pushes with the repository's
@@ -56,6 +59,31 @@ RELEASE_TAG=v0.4.0 DRY_RUN=1 ./update-formula.sh
 
 # Against whatever the latest upstream release is:
 DRY_RUN=1 ./update-formula.sh
+```
+
+## Releases arrive as pull requests
+
+The git-cleanup **release workflow** (`.github/workflows/release.yml` in
+[Asunachi/git-cleanup](https://github.com/Asunachi/git-cleanup)) also
+updates this formula on every release — but instead of pushing to `main`
+blindly, it runs `update-formula.sh` with `RELEASE_PR=1`: the bump lands on
+a `release-<tag>` branch and is filed as a pull request (`git-cleanup
+X.Y.Z`), so each release is reviewable here before `brew` users get it.
+
+In that mode the updater hashes the *release tree* directly (via
+`TARBALL_URL`, with `WRITE_URL` keeping the formula's url pointed at the
+npm registry artifact) because the npm tarball does not exist on the
+registry until `npm publish` runs — `npm pack` is deterministic and the
+registry serves byte-identical tarballs. The daily poll re-verifies the
+pinned sha256 against the real registry tarball afterwards, so any
+hypothetical divergence self-heals. A re-run of the release workflow
+continues the same branch instead of forking it, and never opens a
+duplicate PR.
+
+Rehearsing the PR mode locally (requires the GitHub CLI):
+
+```bash
+RELEASE_TAG=v0.4.0 RELEASE_PR=1 DRY_RUN=1 ./update-formula.sh
 ```
 
 ## Verifying a formula change

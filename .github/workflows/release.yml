@@ -1,0 +1,145 @@
+name: release
+
+# One-button release: run the test suite, bump the version, tag it, push it,
+# publish the GitHub Release, and file the Homebrew tap update as a pull
+# request. Releases are deliberate acts — this workflow only runs by hand
+# (Actions tab / gh workflow run). See CONTRIBUTING "Releasing" for the
+# full flow, including the TAP_REPO_TOKEN secret setup.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: Semver segment to bump (ignored when exact_version is set)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      exact_version:
+        description: Exact version to release, e.g. 0.4.0 (overrides version_bump)
+        type: string
+        required: false
+      dry_run:
+        description: Rehearse — run the tests and print the next version, change nothing
+        type: boolean
+        default: false
+
+# A release is a single deliberate act; never let two runs interleave.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Run the test suite
+        shell: bash
+        run: npm test
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history: the bump script refuses to reuse an existing tag,
+          # which needs the tag refs present.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Bump the version (rehearses with --dry-run)
+        id: bump
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.exact_version }}" ]; then
+            ARG="exact=${{ inputs.exact_version }}"
+          else
+            ARG="${{ inputs.version_bump }}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then FLAG="--dry-run"; else FLAG=""; fi
+          VERSION="$(node support/release/bump-version.mjs "$ARG" $FLAG)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "next version: $VERSION"
+
+      - name: Commit, tag, and push
+        if: inputs.dry_run != 'true'
+        shell: bash
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json homebrew-git-cleanup/Formula/git-cleanup.rb
+          git commit -m "Release ${VERSION}" -m "Version bump and Homebrew tap re-seed by the release workflow."
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin main "v${VERSION}"
+          echo "pushed main and v${VERSION} — release-check and pages workflows trigger automatically"
+
+      - name: Publish the GitHub Release
+        if: inputs.dry_run != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          gh release create "v${VERSION}" --title "git-cleanup ${VERSION}" --generate-notes
+
+  tap-pr:
+    needs: release
+    if: inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Cross-repo checkout: the automatic GITHUB_TOKEN cannot write to
+          # another repository, so this needs TAP_REPO_TOKEN — a fine-grained
+          # PAT with Contents + Pull requests write on
+          # Asunachi/homebrew-git-cleanup (see CONTRIBUTING).
+          repository: Asunachi/homebrew-git-cleanup
+          token: ${{ secrets.TAP_REPO_TOKEN }}
+          path: tap
+
+      - uses: actions/checkout@v5
+        with:
+          ref: v${{ needs.release.outputs.version }}
+          path: release
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Bump the formula from the release tree and file the tap PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.TAP_REPO_TOKEN }}
+          RELEASE_TAG: v${{ needs.release.outputs.version }}
+          RELEASE_PR: "1"
+          # The formula must point at the registry artifact; TARBALL_URL is
+          # the local pack because the artifact does not exist on the
+          # registry until `npm publish` runs.
+          WRITE_URL: https://registry.npmjs.org/@maliqkara/gitcleanup/-/gitcleanup-${{ needs.release.outputs.version }}.tgz
+        run: |
+          # npm pack is deterministic and the registry serves byte-identical
+          # tarballs (pinned by tests and release-check), so hashing the
+          # release tree is faithful to the future publish; the tap's daily
+          # poll re-verifies the sha against the registry tarball and
+          # re-pins if they ever differed.
+          cd release
+          mkdir -p "$RUNNER_TEMP/pack"
+          npm pack --pack-destination "$RUNNER_TEMP/pack" >/dev/null
+          TGZ=$(ls "$RUNNER_TEMP/pack"/*.tgz | head -n1)
+          cd ../tap
+          TARBALL_URL="file://${TGZ}" ./update-formula.sh
