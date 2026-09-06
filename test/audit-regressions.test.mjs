@@ -15,9 +15,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import { DAY, commit, identEnv, makeWorkRepo, sh } from "../support/helpers.mjs";
 import { analyzeRepo } from "../src/analyze.mjs";
@@ -272,37 +272,36 @@ test("prune refuses a remote delete when the tracking ref is gone", async () => 
 test("backup paths stay inside the repo when invoked from a subdirectory", async () => {
   const f = fixture();
   try {
-    // git returns canonical paths (realpath, expanded 8.3 short names on
-    // Windows, normalized separators) while Node's tmpdir path is lexical
-    // (/tmp -> /private/tmp on macOS, RUNNER~1 -> runneradmin on Windows).
-    // Compare canonical forms so the assertion tests the directory, not
-    // the spelling of the temp path. The backup dir may not exist yet at
-    // the list step, so canonicalize what exists and compare the rest
-    // lexically — both sides derive from the same base, so equality still
-    // holds.
-    const canon = (p) => {
-      try {
-        return realpathSync(p).replace(/\\/g, "/");
-      } catch {
-        return p.replace(/\\/g, "/");
-      }
+    // Path spellings differ by platform (git realpaths /tmp -> /private/tmp
+    // on macOS and expands RUNNER~1 -> runneradmin on Windows) and Node's
+    // realpathSync does not expand 8.3 short names, so string equality is
+    // hopeless here. The assertion that matters is "the same directory":
+    // dev+ino compare is spelling-agnostic on every OS.
+    const samePath = (a, b) => {
+      const s1 = statSync(a);
+      const s2 = statSync(b);
+      return s1.dev === s2.dev && s1.ino === s2.ino;
     };
 
     const sub = join(f.work, "src");
     mkdirSync(sub, { recursive: true });
 
     const meta = repoMeta(sub);
-    assert.equal(canon(meta.root), canon(f.work));
-    assert.equal(
-      canon(meta.gitDir),
-      canon(join(f.work, ".git")),
+    assert.ok(samePath(meta.root, f.work), "root must be the repo, not its parent");
+    assert.ok(
+      samePath(meta.gitDir, join(f.work, ".git")),
       "git dir must resolve against the caller cwd"
     );
 
     const cfg = defaults();
-    // listBackupFiles resolves the dir from the subdir too.
+    // listBackupFiles resolves the dir from the subdir too. The backup dir
+    // does not exist yet at this step, so compare its parent + name.
     const doc = listBackupFiles(sub, cfg);
-    assert.equal(canon(doc.dir), canon(join(f.work, ".git", "git-cleanup-backups")));
+    assert.ok(
+      samePath(dirname(doc.dir), join(f.work, ".git")),
+      "backup dir must live inside the repo's .git"
+    );
+    assert.equal(basename(doc.dir), "git-cleanup-backups");
 
     // End to end: force-prune from the subdir writes the bundle in the
     // repo's own backup dir (old code wrote it one level up).
@@ -312,9 +311,8 @@ test("backup paths stay inside the repo when invoked from a subdirectory", async
     const summary = await pruneRepo(repo, cfg, { yes: true });
     assert.ok(summary.deletedLocal.includes("wip/stale"), String(summary.deletedLocal));
     const bk = summary.backups[0];
-    assert.equal(
-      canon(dirname(bk.file)),
-      canon(join(f.work, ".git", "git-cleanup-backups")),
+    assert.ok(
+      samePath(dirname(bk.file), join(f.work, ".git", "git-cleanup-backups")),
       bk.file
     );
     assert.ok(existsSync(bk.file), "bundle written");
