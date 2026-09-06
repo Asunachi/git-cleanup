@@ -2,3 +2,5 @@ node_modules/
 .freebuff/
 test/.scratch/
 *.log
+coverage.json
+coverage-raw.json
