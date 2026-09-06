@@ -1,10 +1,14 @@
 {
   "name": "@maliqkara/gitcleanup",
-  "version": "0.3.0",
-  "publishConfig": { "access": "public" },
+  "version": "0.4.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Scan local and remote Git branches, cross-reference PR merge status, and safely prune stale/merged branches.",
   "license": "MIT",
-  "author": { "name": "Maliq" },
+  "author": {
+    "name": "Maliq"
+  },
   "homepage": "https://github.com/Asunachi/git-cleanup",
   "repository": {
     "type": "git",
@@ -20,7 +24,15 @@
   "exports": {
     ".": "./src/index.mjs"
   },
-  "files": ["bin", "src", "support/completions", "support/dotfiles", "README.md", "LICENSE", "CHANGELOG.md"],
+  "files": [
+    "bin",
+    "src",
+    "support/completions",
+    "support/dotfiles",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
