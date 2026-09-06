@@ -106,6 +106,13 @@ test("parseGitLabRemote handles https, ssh, nested groups and self-hosted", () =
     host: "gitlab.example.org",
     apiBase: "https://gitlab.example.org/api/v4",
   });
+  // A custom SSH port is transport detail, not part of the namespace.
+  assert.deepEqual(p("ssh://git@gitlab.example.org:2222/group/repo.git"), {
+    owner: "group",
+    repo: "repo",
+    host: "gitlab.example.org",
+    apiBase: "https://gitlab.example.org/api/v4",
+  });
   assert.equal(p("https://github.com/owner/repo.git"), null);
   assert.equal(p("https://gitlab.com/"), null);
   assert.equal(p(""), null);

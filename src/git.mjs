@@ -41,8 +41,13 @@ export function repoMeta(cwd) {
   if (!root.ok) return null;
 
   // Common git dir (the .git directory shared by worktrees), absolutized.
+  // `--git-common-dir` may be relative to the directory Git was invoked in,
+  // not to the work-tree root (notably from a subdirectory and in linked
+  // worktrees). Resolve it against the caller's cwd so backup paths never
+  // escape into a neighboring project.
   const gd = git(["rev-parse", "--git-common-dir"], { cwd });
-  const gitDir = gd.ok ? resolve(root.out, gd.out) : null;
+  const caller = resolve(cwd ?? process.cwd());
+  const gitDir = gd.ok ? resolve(caller, gd.out) : null;
 
   const headRes = git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd });
   const head = headRes.ok ? headRes.out : null;
@@ -179,16 +184,23 @@ export function treeOf(cwd, ref) {
  * commit SHAs were rewritten, so pure ancestor detection cannot see them.
  */
 export function treeIndexForBaseRefs(cwd, baseRefs) {
+  // Keep the commit that produced each tree, not just the tree hash. A tree
+  // that existed before a branch fork is not evidence that the branch was
+  // squash-merged; the commit ancestry check in isContentMerged uses these
+  // SHAs to reject that false positive (especially revert/rollback branches).
   const index = new Map();
   baseRefs.forEach((base, idx) => {
-    const r = git(["log", "--format=%T", base], { cwd });
+    const r = git(["log", "--format=%H %T", base], { cwd });
     if (!r.ok) return;
     for (const line of r.out.split("\n")) {
-      const h = line.trim();
-      if (!h) continue;
-      const owners = index.get(h);
-      if (!owners) index.set(h, [idx]);
-      else if (!owners.includes(idx)) owners.push(idx);
+      const m = /^(\b[0-9a-f]{40}) ([0-9a-f]{40})$/.exec(line.trim());
+      if (!m) continue;
+      const [, sha, tree] = m;
+      const owners = index.get(tree) ?? [];
+      if (!owners.some((owner) => owner.idx === idx && owner.sha === sha)) {
+        owners.push({ idx, sha });
+      }
+      index.set(tree, owners);
     }
   });
   return index;
@@ -207,11 +219,26 @@ export function isContentMerged(cwd, ref, baseRefs, treeIndex) {
   if (!tree) return false;
   const owners = treeIndex.get(tree);
   if (!owners) return false;
-  for (const idx of owners) {
-    const mb = git(["merge-base", ref, baseRefs[idx]], { cwd });
-    if (!mb.ok) continue;
-    const mbTree = treeOf(cwd, mb.out);
-    if (mbTree && mbTree !== tree) return true;
+  // The fork point (merge-base + its tree) depends only on the base ref, not
+  // on which history commit owns the matching tree. Compute it once per base
+  // so a tree that repeats many times in history (e.g. the empty tree in
+  // --allow-empty-heavy repos) does not respawn git for every occurrence.
+  const forkCache = new Map();
+  for (const owner of owners) {
+    let fork = forkCache.get(owner.idx);
+    if (fork === undefined) {
+      const mb = git(["merge-base", ref, baseRefs[owner.idx]], { cwd });
+      fork = mb.ok ? { mb: mb.out, tree: treeOf(cwd, mb.out) } : null;
+      forkCache.set(owner.idx, fork);
+    }
+    if (!fork || !fork.tree || fork.tree === tree) continue;
+    // The matching base commit must be strictly after the branch's fork
+    // point. Without this ancestry check, a branch that starts after a main
+    // change and then reverts it looks "merged" merely because its final
+    // tree matches an older base snapshot.
+    if (git(["merge-base", "--is-ancestor", fork.mb, owner.sha], { cwd }).ok) {
+      return true;
+    }
   }
   return false;
 }

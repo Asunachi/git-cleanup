@@ -6,7 +6,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Delete-time revalidation** (prune is no longer a blind name-based
+  delete): every branch is re-checked against the exact SHA the scan
+  analyzed right before deletion. A local branch that moved between scan
+  and prune (rebase, force-push, someone else's fast-forward) is skipped
+  with a loud error instead of force-deleted; an ancestor-merged branch
+  must still be an ancestor of a base ref to take the `-d` path. Remote
+  deletion is now atomic against the analyzed SHA: the push carries
+  `--force-with-lease=<ref>:<sha>`, so a branch that advanced on the
+  server after the scan is refused server-side and surfaces as an error —
+  and a vanished tracking ref skips the delete instead of pushing blind.
+  All refusals say "re-run scan", so the next pass re-judges cleanly.
+- **Revert branches are no longer misread as squash-merged**: content
+  merge detection now requires the matching base tree to occur *after*
+  the branch's fork point (ancestry check), not anywhere in base history.
+  A branch that forks after a main change and reverts it used to match
+  the pre-fork tree and get flagged DELETE; it is now correctly judged
+  unmerged, while genuine squash merges still match.
+
 ### Added
+
+- Regression fixtures for both safety fixes
+  (`test/audit-regressions.test.mjs`): the revert-vs-squash scenario
+  (with a genuine squash positive control in the same repo), every
+  delete-guard refusal (branch moved, branch vanished, base ref lost,
+  tracking ref gone — each with the branch surviving), and
+  subdirectory invocation (backup paths must stay inside the repo).
+- SSH remotes with custom ports parse correctly on every forge: the
+  port (`ssh://git@host:2222/...`, GitHub's SSH-over-443) is transport
+  detail and no longer leaks into the owner/path. `doctor` survives a
+  missing git binary — the repo section degrades to a warning instead of
+  crashing the whole report.
+
+### Fixed
+
+- `repoMeta` resolved git's relative `--git-common-dir` against the repo
+  root instead of the caller's cwd: running from a subdirectory (or a
+  linked worktree) could point backups at a *neighboring* project's
+  `.git` directory. It now resolves against the invocation directory.
+- `isContentMerged` computed the fork point (merge-base + tree) once per
+  base ref instead of once per matching tree occurrence, so histories
+  where one tree repeats many times (e.g. `--allow-empty` chains) no
+  longer spawn a small army of `git merge-base` processes per branch.
 
 - `git-cleanup sweep`: one pass over every configured repo — scan, prune
   by policy (`sweep.mode: "report"` never deletes — the default; `"prune"`

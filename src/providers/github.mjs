@@ -16,7 +16,8 @@ export function parseGitHubRemote(url) {
   const cleaned = url
     .replace(/^git@/, "ssh://git@")
     .replace(/^ssh:\/\/git@github\.com\//, "https://github.com/");
-  const m = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/.exec(cleaned);
+  // Optional :port covers SSH-over-443 remotes (ssh://git@ssh.github.com:443/...).
+  const m = /github\.com(?::\d+)?[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/.exec(cleaned);
   if (!m) return null;
   return { owner: m[1], repo: m[2].replace(/\.git$/, "") };
 }

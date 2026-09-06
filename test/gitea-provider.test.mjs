@@ -102,6 +102,13 @@ test("parseGiteaRemote handles known hosts and rejects others", () => {
     if (prev === undefined) delete process.env.GITEA_API_BASE;
     else process.env.GITEA_API_BASE = prev;
   }
+  // A custom SSH port is transport detail, not part of the namespace.
+  assert.deepEqual(p("ssh://git@gitea.com:2222/owner/repo.git"), {
+    owner: "owner",
+    repo: "repo",
+    host: "gitea.com",
+    apiBase: "https://gitea.com/api/v1",
+  });
   // Unknown and foreign hosts are not claimed.
   assert.equal(p("https://git.example.org/owner/repo"), null); // self-hosted Gitea
   assert.equal(p("https://github.com/owner/repo.git"), null);

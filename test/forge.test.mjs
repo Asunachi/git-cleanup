@@ -60,6 +60,12 @@ test("github provider parses its remote URLs and is registered", () => {
     owner: "owner",
     repo: "repo",
   });
+  // SSH-over-443 (ssh://git@ssh.github.com:443/...) — the port must not
+  // leak into the path.
+  assert.deepEqual(p.parseRemote("ssh://git@ssh.github.com:443/owner/repo.git"), {
+    owner: "owner",
+    repo: "repo",
+  });
   assert.equal(p.parseRemote("https://gitlab.com/owner/repo"), null);
   assert.equal(p.parseRemote("https://example.com/owner/repo"), null);
 });

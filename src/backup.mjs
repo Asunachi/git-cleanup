@@ -17,7 +17,7 @@ import { backupDir, confirmed } from "./prune.mjs";
 import { c, plural } from "./util.mjs";
 
 /** The file naming sweepRetention also recognizes: only these are ours. */
-const BACKUP_GLOB = /^backup-.*\.bundle$/;
+const BACKUP_GLOB = /^backup-[^/]+\.bundle$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function repoOf(cwd) {

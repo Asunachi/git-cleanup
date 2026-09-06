@@ -2,9 +2,9 @@
 // interactive confirmation (or --yes on the command line).
 
 import { createInterface } from "node:readline";
-import { mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { git } from "./git.mjs";
+import { git, resolveRef } from "./git.mjs";
 import { VERDICTS } from "./classify.mjs";
 import { c, plural } from "./util.mjs";
 
@@ -70,8 +70,14 @@ function backupBranches(repo, cfg, branches, tag) {
   } catch (e) {
     return { error: `cannot create backup dir ${dir}: ${e.message}` };
   }
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const file = join(dir, `backup-${stamp}-${tag}.bundle`);
+  // A unique file per bundle: the timestamp is the human-readable identity,
+  // the counter guards the (rare) same-millisecond rerun so a later bundle
+  // can never overwrite an earlier one inside the same repo.
+  let stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  let file = join(dir, `backup-${stamp}-${tag}.bundle`);
+  for (let n = 2; existsSync(file); n++) {
+    file = join(dir, `backup-${stamp}-${n}-${tag}.bundle`);
+  }
   const r = git(["bundle", "create", file, ...branches.map((b) => b.ref)], {
     cwd: repo.root,
   });
@@ -140,6 +146,15 @@ function deleteLocalBranches(repo, cfg, branches) {
   const errors = [];
   const backedUp = [];
   for (const b of branches) {
+    // TOCTOU guard: the branch must still point at the commit the scan
+    // analyzed, and an ancestor-merged branch must still be merged into the
+    // base. A branch that moved (force-push, fast-forward, someone's rebase)
+    // between scan and deletion is left alone — the next scan re-judges it.
+    const guard = guardLocalDeletion(repo, b);
+    if (!guard.ok) {
+      errors.push({ name: b.name, error: guard.error });
+      continue;
+    }
     const flag = b.merged ? "-d" : "-D";
     const r = git(["branch", flag, b.name], { cwd: repo.root });
     if (r.ok) {
@@ -179,6 +194,34 @@ function deleteLocalBranches(repo, cfg, branches) {
   return { done, errors, backedUp };
 }
 
+/**
+ * Re-verify a local branch right before deleting it: it must still exist at
+ * the exact SHA the scan analyzed, and if the scan called it ancestor-merged
+ * the branch tip must still be an ancestor of a base ref. Returns
+ * { ok: true } or { ok: false, error }.
+ */
+function guardLocalDeletion(repo, b) {
+  const current = resolveRef(repo.root, b.ref ?? b.name);
+  if (!current) {
+    return { ok: false, error: "branch disappeared between scan and delete — skipping" };
+  }
+  if (b.sha && current !== b.sha) {
+    return {
+      ok: false,
+      error: `branch moved since scan (${b.sha.slice(0, 12)} → ${current.slice(0, 12)}) — skipping; re-run scan`,
+    };
+  }
+  if (b.merged) {
+    for (const base of repo.baseRefs ?? []) {
+      if (git(["merge-base", "--is-ancestor", current, base], { cwd: repo.root }).ok) {
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: "branch is no longer merged into any base branch — skipping" };
+  }
+  return { ok: true };
+}
+
 function deleteRemoteBranches(repo, branches) {
   const done = [];
   const pruned = [];
@@ -190,10 +233,39 @@ function deleteRemoteBranches(repo, branches) {
   }
   for (const [remote, list] of byRemote) {
     for (const b of list) {
-      const r = git(["push", remote, "--delete", b.shortName], { cwd: repo.root });
+      const tracking = `${remote}/${b.shortName}`;
+      // TOCTOU guard: only delete the remote branch if it still points at
+      // the SHA this run analyzed. The local tracking ref is checked first;
+      // then --force-with-lease makes the push itself atomic against the
+      // server, so a branch that moved after the scan is never deleted
+      // silently — it surfaces as an error instead (unless it is already
+      // gone, which the ls-remote fallback below handles).
+      const trackingSha = resolveRef(repo.root, tracking);
+      if (b.sha && trackingSha && trackingSha !== b.sha) {
+        errors.push({
+          name: tracking,
+          error: `branch moved since scan (${b.sha.slice(0, 12)} → ${trackingSha.slice(0, 12)}) — skipping; re-run scan`,
+        });
+        continue;
+      }
+      if (b.sha && !trackingSha) {
+        // The tracking ref vanished between scan and prune (e.g. a fetch
+        // --prune). The remote branch may still exist and may have advanced;
+        // without a lease anchor we cannot delete atomically, so we do not.
+        errors.push({
+          name: tracking,
+          error: "cannot verify remote branch state (tracking ref gone) — skipping; re-run scan",
+        });
+        continue;
+      }
+      const lease =
+        b.sha && trackingSha
+          ? [`--force-with-lease=refs/heads/${b.shortName}:${trackingSha}`]
+          : [];
+      const r = git(["push", ...lease, remote, "--delete", b.shortName], { cwd: repo.root });
       if (r.ok) {
-        git(["branch", "-rd", `${remote}/${b.shortName}`], { cwd: repo.root });
-        done.push(`${remote}/${b.shortName}`);
+        git(["branch", "-rd", tracking], { cwd: repo.root });
+        done.push(tracking);
         continue;
       }
       // push --delete failed. When the branch was already deleted on the
@@ -208,12 +280,12 @@ function deleteRemoteBranches(repo, branches) {
         { cwd: repo.root }
       );
       if (ls.ok && ls.out.trim() === "") {
-        git(["branch", "-rd", `${remote}/${b.shortName}`], { cwd: repo.root });
-        pruned.push(`${remote}/${b.shortName}`);
+        git(["branch", "-rd", tracking], { cwd: repo.root });
+        pruned.push(tracking);
         continue;
       }
       errors.push({
-        name: `${remote}/${b.shortName}`,
+        name: tracking,
         error: r.err || "git push --delete failed (network/auth?)",
       });
     }

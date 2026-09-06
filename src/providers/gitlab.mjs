@@ -37,7 +37,8 @@ export function parseGitLabRemote(url, hostMap = {}) {
     u = u.replace(/^[a-z][a-z0-9+.-]*:\/\//, ""); // drop scheme (https://, ssh://)
   }
   u = u.replace(/^[^@/]+@/, ""); // drop userinfo (git@host:path, user@https)
-  const m = /^([^/:]+)[:/](.+)$/.exec(u);
+  // Optional :port (ssh://git@host:2222/...) must not leak into the path.
+  const m = /^([^/:\s]+)(?::\d+)?[:/](.+)$/.exec(u);
   if (!m) return null;
   const host = m[1].toLowerCase();
   if (!host.includes("gitlab") && hostMap[host] !== "gitlab") return null;

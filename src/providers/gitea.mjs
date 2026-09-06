@@ -56,7 +56,8 @@ export function parseGiteaRemote(url, hostMap = {}) {
   u = u.replace(/^[a-z][a-z0-9+.-]*:\/\//, ""); // https://, git:// -> host/...
   const at = u.indexOf("@");
   if (at !== -1) u = u.slice(at + 1); // drop userinfo (git@host:path)
-  const m = /^([^/:]+)[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/.exec(u);
+  // Optional :port (ssh://git@host:2222/...) must not leak into the path.
+  const m = /^([^/:\s]+)(?::\d+)?[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/.exec(u);
   if (!m) return null;
   const host = m[1].toLowerCase();
   if (!HOSTS[host] && hostMap[host] !== "gitea") return null;

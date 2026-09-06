@@ -99,14 +99,31 @@ export function runDoctor({ cwd = process.cwd(), env = process.env, configFile =
   const hostMap = config.status === "ok" ? config.forgeHosts : {};
 
   let repo;
-  const meta = repoMeta(cwd);
+  // Without a git binary every git call below would throw a raw stack
+  // trace; the git check above already reports the real error, so the repo
+  // section degrades to "skipped" instead of crashing the report.
+  let meta = null;
+  if (git.status === "ok") {
+    try {
+      meta = repoMeta(cwd);
+    } catch {
+      meta = null;
+    }
+  }
   if (!meta) {
-    repo = {
-      status: "warn",
-      path: cwd,
-      message: `not inside a git repository (${cwd}) — remote detection skipped`,
-      remotes: [],
-    };
+    repo = git.status === "ok"
+      ? {
+          status: "warn",
+          path: cwd,
+          message: `not inside a git repository (${cwd}) — remote detection skipped`,
+          remotes: [],
+        }
+      : {
+          status: "warn",
+          path: cwd,
+          message: "git unavailable — repo checks skipped (see the git check above)",
+          remotes: [],
+        };
   } else {
     const remotes = [];
     for (const name of meta.remotes) {

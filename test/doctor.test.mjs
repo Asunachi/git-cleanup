@@ -192,6 +192,31 @@ test("doctor: a broken config is an error and fails the run", () => {
   }
 });
 
+test("doctor: a missing git binary degrades the repo section instead of crashing", () => {
+  const dir = mkRepo();
+  try {
+    // spawnSync with a missing binary returns { error } — runDoctor's git()
+    // turns that into a GitError, which used to escape as a stack trace.
+    const noGit = (cmd, args, opts) => {
+      if (cmd === "gh") return GH_MISSING;
+      return { status: null, error: new Error(`spawn ${cmd} ENOENT`), stdout: "", stderr: "" };
+    };
+    const doc = runDoctor({ cwd: dir, env: ALL_TOKENS, homeFile: NO_HOME, spawn: noGit });
+    assert.equal(doc.git.status, "error");
+    assert.match(doc.git.message, /git not found/);
+    assert.equal(doc.ok, false);
+    assert.equal(doc.counts.error, 1);
+    // The repo section degrades to a warn, never a crash.
+    assert.equal(doc.repo.status, "warn");
+    assert.match(doc.repo.message, /git unavailable/);
+    const text = printDoctor(doc);
+    assert.match(text, /✗ git/);
+    assert.match(text, /git unavailable/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("doctor: outside a git repo it still checks everything else", () => {
   const dir = mkdtempSync(join(tmpdir(), "gc-doctor-norepo-"));
   try {
