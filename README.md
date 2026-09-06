@@ -6,19 +6,21 @@
 [![node](https://img.shields.io/badge/node-%3E%3D18-339933)](https://nodejs.org)
 [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fasunachi.github.io%2Fgit-cleanup%2Fcoverage.json)](https://github.com/Asunachi/git-cleanup/actions/workflows/pages.yml)
 
-A zero-dependency CLI that keeps your Git workspace pristine: it scans local
-and remote branches, cross-references each branch's activity (last commit,
-merge status, upstream state) with its pull-request status on GitHub,
-GitLab, Bitbucket (Cloud and self-hosted Server/Data Center), and
-Gitea-family forges, then safely prunes what is
-genuinely dead — merged branches past an age threshold, abandoned remote
-branches, and scratch branches you opted into deleting.
+**Safely find and remove merged, abandoned, and stale Git branches.**
 
-Built on the `git` binary only (never touches `.git` internals) with optional
-GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea enrichment via
-`gh` CLI or a
-`GITHUB_TOKEN`/`GITLAB_TOKEN`/`BITBUCKET_TOKEN`/`GITEA_TOKEN`. Requires
-**Node.js ≥ 18**, zero npm dependencies.
+```console
+$ git-cleanup scan       # what can go, and why
+$ git-cleanup prune      # deletes it — nothing happens without confirmation
+```
+
+A zero-dependency CLI that keeps your Git workspace pristine: it scans
+local and remote branches, cross-references each branch with its
+pull-request status on GitHub, GitLab, Bitbucket (Cloud and self-hosted
+Server), and Gitea-family forges, and prunes what is genuinely dead —
+merged branches past an age threshold, abandoned remote branches, and
+scratch branches you opted into deleting. Built on the `git` binary only
+(never touches `.git` internals); requires **Node.js ≥ 18**, zero npm
+dependencies.
 
 ## Contents
 
@@ -55,14 +57,10 @@ a simulated repo running the real decision engine in your browser: drag the
 age thresholds and watch every branch re-classify live. The site also hosts
 the [reference docs](https://asunachi.github.io/git-cleanup/docs/) —
 install, usage, the full config schema, per-forge setup, automation, and an
-FAQ — plain HTML, shipped from this repo on every deploy. The page deploys
-automatically from this repo on every `main` push — and the release
-workflow pushes the release commit to `main` before tagging, so the site
-always mirrors the published release. The deploy also runs the
-test suite under Node's built-in coverage reporter and serves
-[`coverage.json`](https://asunachi.github.io/git-cleanup/coverage.json) —
-the data behind the coverage badge above, recomputed on every deploy so it
-always describes exactly the tree the site publishes.
+FAQ. Both deploy automatically on every `main` push and mirror the latest
+release; the deploy also recomputes the coverage badge's data
+([`coverage.json`](https://asunachi.github.io/git-cleanup/coverage.json))
+from exactly the tree it publishes.
 
 ```
 $ git-cleanup scan
