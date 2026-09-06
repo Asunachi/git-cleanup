@@ -149,7 +149,7 @@ test("ci.yml and .gitlab-ci.yml cannot drift apart", () => {
   assert.match(action, /git-cleanup: branch report/);
 });
 
-test("pages.yml structure: deploys the playground on release tags and main", () => {
+test("pages.yml structure: deploys the playground on main pushes and dispatch", () => {
   const PAGE = join(root, ".github", "workflows", "pages.yml");
   assert.ok(existsSync(PAGE), ".github/workflows/pages.yml should exist");
   const code = codeLines(PAGE);
@@ -164,11 +164,17 @@ test("pages.yml structure: deploys the playground on release tags and main", () 
   assert.deepEqual(top, ["name", "on", "permissions", "concurrency", "jobs"]);
 
   const text = readFileSync(PAGE, "utf8");
-  // Every release tag republishes the playground (the live site mirrors the
-  // latest release); main pushes and manual dispatch also deploy.
-  assert.match(text, /tags: \["v\*"\]/);
-  assert.match(text, /branches: \[main\]/);
-  assert.match(text, /workflow_dispatch/);
+  // Main pushes and manual dispatch deploy (the release workflow pushes the
+  // release commit to main before tagging, so the site mirrors releases via
+  // the main trigger). Tags deliberately do NOT trigger: a tag push lands on
+  // the same commit as the release's main push, and two same-commit pages
+  // runs cancel each other mid-deploy under the concurrency guard — a known
+  // Pages artifact race that failed deploys; a retroactive old tag would
+  // also roll the site back to an ancient engine.
+  const onBlock = text.slice(text.indexOf("on:"), text.indexOf("permissions:"));
+  assert.match(onBlock, /branches: \[main\]/);
+  assert.match(onBlock, /workflow_dispatch/);
+  assert.ok(!/^\s+tags:/m.test(onBlock), "pages must not trigger on tags (see the race note)");
   // The deploy actually republishes the engine: it regenerates index.html
   // from src/engine.mjs and refuses to publish a stale copy.
   assert.match(text, /npm run sync:playground/);

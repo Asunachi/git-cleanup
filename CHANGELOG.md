@@ -213,10 +213,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   --close`, and a loud "no issues support" failure for report-issue (its
   issues live in Jira). Server remotes authenticate with the same
   `BITBUCKET_TOKEN` as Cloud, and `doctor` reports them correctly.
-- The GitHub Pages deploy (`pages.yml`) now runs on every `v*` release tag
-  (in addition to `main` pushes and manual dispatch), so the playground at
-  asunachi.github.io/git-cleanup always mirrors the latest published
-  release. Before deploying it regenerates `index.html` from
+- The GitHub Pages deploy (`pages.yml`) runs on every `main` push and
+  manual dispatch, so the playground at asunachi.github.io/git-cleanup
+  always mirrors the latest published release (the release workflow pushes
+  the release commit to `main` before tagging). Tags deliberately do **not**
+  trigger it: a tag push lands on the same commit as the release's main
+  push, and two same-commit pages runs cancel each other mid-deploy under
+  the concurrency guard — a GitHub Pages artifact race that failed the
+  deploy ~50% of the time and was previously recovered by hand — while a
+  retroactive tag for an old version would roll the site back to an ancient
+  engine. Before deploying it regenerates `index.html` from
   `src/engine.mjs` and refuses to publish a page that drifted from the
   committed bundle — the same freshness gate CI enforces per PR.
 - A one-button **release workflow** (`.github/workflows/release.yml`,

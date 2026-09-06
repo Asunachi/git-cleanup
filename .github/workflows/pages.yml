@@ -5,10 +5,18 @@ name: pages
 # Live at https://asunachi.github.io/git-cleanup/
 #
 # Runs on:
-#   - every release tag (v*) — the live playground always mirrors the latest
-#     published release,
-#   - every push to main (unreleased engine changes preview there too), and
+#   - every push to main (the release workflow pushes the release commit to
+#     main before tagging, so the live playground always mirrors the latest
+#     published release — unreleased engine changes preview there too), and
 #   - manual workflow_dispatch.
+#
+# Deliberately NOT triggered by v* tags: a tag push lands on the same commit
+# as the release's main push, and two same-commit pages runs cancel each
+# other under the concurrency guard while one is mid-deploy — a known GitHub
+# Pages artifact race that failed the deploy ~50% of the time. The main push
+# already deploys the tag's tree; a retroactive tag for an old version
+# (CONTRIBUTING "Tagging past releases") would also roll the site back to an
+# ancient engine, which is never what the playground should show.
 #
 # Before deploying, the committed index.html is regenerated from
 # src/engine.mjs (npm run sync:playground) and verified byte-identical to
@@ -25,7 +33,6 @@ name: pages
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:

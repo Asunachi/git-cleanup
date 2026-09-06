@@ -53,8 +53,9 @@ GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea enrichment via
 **Try the [interactive playground](https://asunachi.github.io/git-cleanup/)** —
 a simulated repo running the real decision engine in your browser: drag the
 age thresholds and watch every branch re-classify live. The page deploys
-automatically from this repo on every `v*` release tag (and each `main`
-push), so it always mirrors the published release. The deploy also runs the
+automatically from this repo on every `main` push — and the release
+workflow pushes the release commit to `main` before tagging, so the site
+always mirrors the published release. The deploy also runs the
 test suite under Node's built-in coverage reporter and serves
 [`coverage.json`](https://asunachi.github.io/git-cleanup/coverage.json) —
 the data behind the coverage badge above, recomputed on every deploy so it
