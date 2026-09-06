@@ -5,11 +5,14 @@
 // scaffold (homebrew-git-cleanup/Formula/git-cleanup.rb) with the new
 // version and the sha256 of the tarball this tree will publish.
 //
-// npm pack is deterministic and the registry serves byte-identical
-// artifacts (pinned by test/release.test.mjs, the release-check workflow,
-// and the tap updater's daily sha re-verification), so hashing the local
-// pack is faithful to what `npm publish` will upload — and the tap updater
-// re-checks against the real registry tarball anyway.
+// npm pack is deterministic for a fixed Node version, and the registry
+// serves byte-identical artifacts to the pack that uploads them — so
+// hashing the local pack is faithful to what `npm publish` will upload
+// WHEN BOTH RUN ON THE SAME NODE. Pack output varies across Node versions
+// (zlib differences — Node 20 vs 26 produce different digests for the same
+// tree), so this script's sha is only trustworthy when the publish machine
+// matches the packing Node. The tap updater's daily re-verification
+// against the real registry tarball is the ground truth regardless.
 //
 // Usage (run from the repository root):
 //   node support/release/bump-version.mjs [patch|minor|major|exact=X.Y.Z] [--dry-run]

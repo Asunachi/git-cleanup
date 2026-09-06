@@ -61,9 +61,16 @@ jobs:
           # which needs the tag refs present.
           fetch-depth: 0
 
+      # IMPORTANT: the re-seeded formula sha256 comes from `npm pack`, and
+      # pack output varies with the Node version's zlib — Node 20 and Node
+      # 26 produce different digests for the same tree (caught live on
+      # release-check). This job therefore pins the SAME Node the npm
+      # publish uses (see CONTRIBUTING "Releasing"), so the pin matches the
+      # registry artifact. Mismatch is survivable anyway: the tap's daily
+      # poll hashes the real artifact and re-pins within a day.
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 26
 
       - name: Bump the version (rehearses with --dry-run)
         id: bump
@@ -121,9 +128,11 @@ jobs:
           ref: v${{ needs.release.outputs.version }}
           path: release
 
+      # Same Node-pinning rationale as the release job: the formula's sha256
+      # must match the digest the publisher's npm produces.
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 26
 
       - name: Bump the formula from the release tree and file the tap PR
         shell: bash
@@ -136,11 +145,12 @@ jobs:
           # registry until `npm publish` runs.
           WRITE_URL: https://registry.npmjs.org/@maliqkara/gitcleanup/-/gitcleanup-${{ needs.release.outputs.version }}.tgz
         run: |
-          # npm pack is deterministic and the registry serves byte-identical
-          # tarballs (pinned by tests and release-check), so hashing the
-          # release tree is faithful to the future publish; the tap's daily
-          # poll re-verifies the sha against the registry tarball and
-          # re-pins if they ever differed.
+          # npm pack is deterministic for a fixed Node version (this job
+          # pins Node 26, matching the publish environment) and the registry
+          # serves byte-identical tarballs, so hashing the release tree is
+          # faithful to the future publish; the tap's daily poll re-verifies
+          # the sha against the registry tarball and re-pins if they ever
+          # differed.
           cd release
           mkdir -p "$RUNNER_TEMP/pack"
           npm pack --pack-destination "$RUNNER_TEMP/pack" >/dev/null

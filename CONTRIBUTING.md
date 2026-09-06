@@ -150,8 +150,10 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
    - runs `npm test`;
    - bumps `package.json` and re-seeds the tap formula scaffold
      (`support/release/bump-version.mjs`; the sha256 comes from `npm pack`
-     of the release tree — deterministic and byte-identical to the
-     registry artifact, and re-verified by the tap's daily poll);
+     of the release tree — deterministic for a fixed Node version, so the
+     workflow pins Node 26 for its packing steps and **npm publish must
+     run on Node 26 too**, or the pin will not match the registry
+     artifact);
    - commits `Release X.Y.Z`, tags `vX.Y.Z` (annotated), and pushes both
      — which triggers `release-check` and the Pages deploy automatically;
    - creates the GitHub Release from the tag;
@@ -175,13 +177,20 @@ Access Tokens → *Granular Access Token*, scoped to the package, with the
    `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
    before anything goes out.
 4. `npm publish` runs `prepublishOnly` (`npm test`) and refuses to proceed
-   if any test fails. The workflow tags the bump commit, so the tag already
+   if any test fails. **Run it with Node 26** (the same version the release
+   workflow pins for packing): `npm pack` output varies across Node
+   versions — Node 20 and Node 26 produce different tarball sha256s for
+   the same tree (verified live) — so a different publish Node would give
+   `brew` users a checksum mismatch until the tap's daily poll re-pins.
+   If you do publish from another Node, dispatch the tap's `update-formula`
+   workflow manually right after publishing so the formula is corrected
+   immediately. The workflow tags the bump commit, so the tag already
    points at the exact tree npm publishes; if `main` has drifted past the
    published version instead, tag the bump commit itself and push the tag
-   explicitly so it matches the npm artifact (`git rev-parse vX.Y.Z^{commit}`
-   must equal the bump commit). The release tag is also what consumers pin
-   for the GitHub Action, so a version whose tree lacks a feature must not
-   be presented as carrying it.
+   explicitly so it matches the npm artifact
+   (`git rev-parse vX.Y.Z^{commit}` must equal the bump commit). The
+   release tag is also what consumers pin for the GitHub Action, so a
+   version whose tree lacks a feature must not be presented as carrying it.
 5. **Verify the tarball on every OS before announcing the release.** The
    `release-check` workflow (`.github/workflows/release-check.yml`) runs
    automatically when the `v*` tag is pushed: it packs the exact tree the

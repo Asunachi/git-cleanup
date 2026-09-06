@@ -73,10 +73,12 @@ X.Y.Z`), so each release is reviewable here before `brew` users get it.
 In that mode the updater hashes the *release tree* directly (via
 `TARBALL_URL`, with `WRITE_URL` keeping the formula's url pointed at the
 npm registry artifact) because the npm tarball does not exist on the
-registry until `npm publish` runs — `npm pack` is deterministic and the
-registry serves byte-identical tarballs. The daily poll re-verifies the
-pinned sha256 against the real registry tarball afterwards, so any
-hypothetical divergence self-heals. A re-run of the release workflow
+registry until `npm publish` runs — `npm pack` is deterministic for a
+fixed Node version, and the release workflow pins the same Node (26) the
+publish uses. The daily poll re-verifies the pinned sha256 against the
+real registry tarball afterwards, so any divergence (e.g. a publish from
+a different Node) self-heals within a day — or instantly when dispatched
+manually right after publishing. A re-run of the release workflow
 continues the same branch instead of forking it, and never opens a
 duplicate PR.
 

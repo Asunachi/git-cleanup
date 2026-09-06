@@ -11,11 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A "what this repo demonstrates" skills-mapping section near the top of
   the README, so reviewers and recruiters can see at a glance which
   engineering skills each part of the project exercises.
-- The `release-check` workflow now compares the packed tarball's sha256
-  against the Homebrew formula's pin and fails the run when they diverge,
-  so a release with a stale checksum can never be announced (`brew
-  install` stays correct from minute one; the tap's daily poll re-verifies
-  afterwards anyway).
+- Documented a subtle release constraint: **`npm pack` output varies with
+  the packing Node version's zlib** — Node 20 and Node 26 produce
+  different tarball sha256s for the same tree (verified live: CI packed
+  `f1a3e09a…`, Node 26 packed `5152da5c…`). The formula pin must therefore
+  be computed with the same Node the npm publish uses: the release
+  workflow now pins Node 26 for its packing steps and CONTRIBUTING states
+  the requirement. A CI-side formula-sha guard was tried and removed — CI
+  cannot reproduce the publisher's digest in general — and the tap's
+  `update-formula` poll remains the ground-truth guard: it hashes the real
+  registry artifact and re-pins within a day, or instantly when dispatched
+  manually right after publishing.
 
 ## [0.3.0] - 2026-09-06
 

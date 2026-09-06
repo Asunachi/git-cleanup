@@ -2,8 +2,9 @@
 // behind .github/workflows/release.yml. The script must be dependency-free
 // and deterministic: semver math, a tag-reuse guard, and a tap-formula
 // re-seed whose sha256 equals the sha256 of `npm pack` on the same tree
-// (npm pack is deterministic and the registry serves byte-identical
-// artifacts, which is what makes the pre-publish sha trustworthy).
+// under the same Node version (pack output varies across Node versions —
+// see CONTRIBUTING "Releasing" — which is why the tap's daily poll
+// re-verifies against the real registry artifact).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
