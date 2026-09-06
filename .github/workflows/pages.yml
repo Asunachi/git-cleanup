@@ -1,6 +1,7 @@
 name: pages
 
-# Deploy the interactive playground (index.html + demo.svg) to GitHub Pages.
+# Deploy the interactive playground (index.html + demo.svg) and the
+# coverage badge payload (coverage.json) to GitHub Pages.
 # Live at https://asunachi.github.io/git-cleanup/
 #
 # Runs on:
@@ -12,7 +13,11 @@ name: pages
 # Before deploying, the committed index.html is regenerated from
 # src/engine.mjs (npm run sync:playground) and verified byte-identical to
 # what is committed — the same freshness gate CI enforces on every PR — so a
-# stale page can never be published.
+# stale page can never be published. The test suite then runs again under
+# Node's built-in coverage reporter (npm run coverage): the suite must pass
+# and the coverage badge payload is written to coverage.json, which the site
+# serves for the README badge. The badge therefore always describes exactly
+# the tree this deploy publishes, and a broken tree can never be published.
 #
 # One-time setup: GitHub repo Settings → Pages → Source: "GitHub Actions".
 # Pages then needs no branch; each run publishes the _site artifact.
@@ -56,12 +61,17 @@ jobs:
           fi
           echo "playground bundle verified in sync with src/engine.mjs"
 
+      - name: Run the suite under coverage and write the badge payload
+        shell: bash
+        run: npm run coverage
+
       - name: Stage the site
         shell: bash
         run: |
           mkdir -p _site
           cp index.html _site/
           cp demo.svg _site/
+          cp coverage.json _site/
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -4,25 +4,6 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- A "what this repo demonstrates" skills-mapping section near the top of
-  the README, so reviewers and recruiters can see at a glance which
-  engineering skills each part of the project exercises.
-- Documented a subtle release constraint: **`npm pack` output varies with
-  the packing Node version's zlib** — Node 20 and Node 26 produce
-  different tarball sha256s for the same tree (verified live: CI packed
-  `f1a3e09a…`, Node 26 packed `5152da5c…`). The formula pin must therefore
-  be computed with the same Node the npm publish uses: the release
-  workflow now pins Node 26 for its packing steps and CONTRIBUTING states
-  the requirement. A CI-side formula-sha guard was tried and removed — CI
-  cannot reproduce the publisher's digest in general — and the tap's
-  `update-formula` poll remains the ground-truth guard: it hashes the real
-  registry artifact and re-pins within a day, or instantly when dispatched
-  manually right after publishing.
-
 ## [0.3.0] - 2026-09-06
 
 ### Security
@@ -250,6 +231,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-verifies the pinned `sha256` against the release tarball on every run
   and re-pins it if it drifted, so a release published from a different
   tree can never leave `brew install` with a stale checksum.
+- A "what this repo demonstrates" skills-mapping section near the top of
+  the README, so reviewers and recruiters can see at a glance which
+  engineering skills each part of the project exercises.
+- Documented a subtle release constraint: **`npm pack` output varies with
+  the packing Node version's zlib** — Node 20 and Node 26 produce
+  different tarball sha256s for the same tree (verified live: CI packed
+  `f1a3e09a…`, Node 26 packed `5152da5c…`). The formula pin must therefore
+  be computed with the same Node the npm publish uses: the release
+  workflow now pins Node 26 for its packing steps and CONTRIBUTING states
+  the requirement. A CI-side formula-sha guard was tried and removed — CI
+  cannot reproduce the publisher's digest in general — and the tap's
+  `update-formula` poll remains the ground-truth guard: it hashes the real
+  registry artifact and re-pins within a day, or instantly when dispatched
+  manually right after publishing.
+- A **test-coverage badge**: `npm run coverage` runs the suite under
+  Node's built-in `--experimental-test-coverage` (zero dependencies) and
+  writes `coverage.json` — the shields.io endpoint payload the README
+  badge renders. Coverage is measured over `src/` only, never the tests
+  themselves, and a failing suite writes nothing and exits 1. The file is
+  not committed: the Pages deploy recomputes it and serves it from the
+  site (`https://asunachi.github.io/git-cleanup/coverage.json`), so the
+  badge always describes exactly the tree the playground publishes — and
+  the deploy now refuses to publish a tree whose suite fails.
 
 ### Changed
 

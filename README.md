@@ -4,6 +4,7 @@
 [![npm](https://img.shields.io/npm/v/@maliqkara%2Fgitcleanup)](https://www.npmjs.com/package/@maliqkara/gitcleanup)
 [![license](https://img.shields.io/github/license/Asunachi/git-cleanup)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D18-339933)](https://nodejs.org)
+[![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fasunachi.github.io%2Fgit-cleanup%2Fcoverage.json)](https://github.com/Asunachi/git-cleanup/actions/workflows/pages.yml)
 
 A zero-dependency CLI that keeps your Git workspace pristine: it scans local
 and remote branches, cross-references each branch's activity (last commit,
@@ -53,7 +54,11 @@ GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea enrichment via
 a simulated repo running the real decision engine in your browser: drag the
 age thresholds and watch every branch re-classify live. The page deploys
 automatically from this repo on every `v*` release tag (and each `main`
-push), so it always mirrors the published release.
+push), so it always mirrors the published release. The deploy also runs the
+test suite under Node's built-in coverage reporter and serves
+[`coverage.json`](https://asunachi.github.io/git-cleanup/coverage.json) —
+the data behind the coverage badge above, recomputed on every deploy so it
+always describes exactly the tree the site publishes.
 
 ```
 $ git-cleanup scan
@@ -74,7 +79,7 @@ not in a tutorial:
 | Five forge providers behind one contract (`src/forge.mjs` + `src/providers/`) | API integration — REST dialects, auth, pagination — and abstraction design: a new forge is one file plus one registry line |
 | Zero npm dependencies, Node built-ins only | Dependency discipline: deliberate, documented, and lint-enforced |
 | Bundle-before-delete pruning with confirmation gates | Safety-critical design: irreversible operations made recoverable, auditable, and dry-runnable |
-| 196 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and differential testing against real git history |
+| 204 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and differential testing against real git history |
 | CI on 3 OS × 3 Node versions, a release workflow, an auto-updating Homebrew tap, GitHub Pages | CI/CD and distribution: GitHub Actions, npm packaging, Homebrew, Pages |
 | CONTRIBUTING with a real release runbook, SECURITY.md, Keep-a-Changelog, 60-second demo video | Documentation that treats the next contributor and reviewer as first-class users |
 
@@ -588,8 +593,15 @@ deletions themselves plus a bundle write.
 
 ```bash
 npm test    # node --test: unit + integration + fuzz against real throwaway repos
+npm run coverage  # same suite under --experimental-test-coverage → writes coverage.json
 npm run lint   # zero-dependency lint (syntax + whitespace invariants; runs in npm test too)
 ```
+
+`npm run coverage` uses only Node's built-in test coverage (no dependencies)
+and measures `src/` only — never the tests themselves — and refuses to write
+a badge if any test fails. The file isn't committed: the Pages deploy
+recomputes it and serves it for the README badge, so the number always
+matches the published tree (see `.github/workflows/pages.yml`).
 
 Integration tests build a bare `origin` and a working clone with old merged
 branches, an orphaned branch, stale unmerged work, and protected branches,

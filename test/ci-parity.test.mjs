@@ -183,4 +183,10 @@ test("pages.yml structure: deploys the playground on release tags and main", () 
   // The npm script it runs must exist.
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.ok(pkg.scripts["sync:playground"], "package.json has the sync:playground script pages.yml runs");
+  // The deploy also re-runs the suite under Node's built-in coverage and
+  // serves the result for the README badge, so a broken tree can't publish
+  // and the badge always describes the deployed tree.
+  assert.match(text, /npm run coverage/);
+  assert.match(text, /cp coverage\.json _site\//);
+  assert.ok(pkg.scripts["coverage"], "package.json has the coverage script pages.yml runs");
 });

@@ -13,6 +13,7 @@ a Node.js CLI that shells out to `git` and never touches `.git` internals.
 
 ```bash
 npm test          # node --test: unit + integration + fuzz tests
+npm run coverage  # same suite under --experimental-test-coverage → coverage.json
 npm run lint      # zero-dependency lint (also runs inside npm test)
 node bin/git-cleanup.mjs scan   # try it against a git repo you own
 ```
@@ -22,6 +23,17 @@ only. Please keep it that way unless there is a very strong reason not to.
 The linter (`scripts/lint.mjs`) is dependency-free: it syntax-checks every
 JS file and enforces no-tabs / no-trailing-whitespace / final-newline, and it
 runs as part of `npm test`, so a lint violation can never go green.
+
+The README's coverage badge is generated the same dependency-free way:
+`npm run coverage` runs the suite under Node's built-in
+`--experimental-test-coverage` (needs Node ≥ 21; measure only `src/`,
+never the tests) and writes `coverage.json`, the shields.io payload behind
+the badge. You don't commit that file — the Pages deploy
+(`.github/workflows/pages.yml`) recomputes it on every release/main push
+and serves it from the site, so the badge always matches the published
+tree. Locally it's useful to spot untested paths before pushing: `npm run
+coverage` prints the per-file table, and the badge payload's line/branch
+percentages are in `coverage.json`.
 
 ## Code layout
 
