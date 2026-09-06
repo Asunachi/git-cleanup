@@ -5,6 +5,10 @@ name: release
 # request. Releases are deliberate acts — this workflow only runs by hand
 # (Actions tab / gh workflow run). See CONTRIBUTING "Releasing" for the
 # full flow, including the TAP_REPO_TOKEN secret setup.
+#
+# Note on boolean inputs: gates must use the boolean form (!inputs.dry_run),
+# not a string comparison — API-dispatched boolean inputs coerce
+# unpredictably in `!= 'true'` expressions (caught live on a dry-run run).
 
 on:
   workflow_dispatch:
@@ -76,7 +80,7 @@ jobs:
           echo "next version: $VERSION"
 
       - name: Commit, tag, and push
-        if: inputs.dry_run != 'true'
+        if: ${{ !inputs.dry_run }}
         shell: bash
         run: |
           VERSION="${{ steps.bump.outputs.version }}"
@@ -89,7 +93,7 @@ jobs:
           echo "pushed main and v${VERSION} — release-check and pages workflows trigger automatically"
 
       - name: Publish the GitHub Release
-        if: inputs.dry_run != 'true'
+        if: ${{ !inputs.dry_run }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,7 +103,7 @@ jobs:
 
   tap-pr:
     needs: release
-    if: inputs.dry_run != 'true'
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

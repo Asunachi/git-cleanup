@@ -58,10 +58,14 @@ test("release workflow: dispatch-only, inputs, permissions, and job chain", () =
   // tab is what users and reviewers see — and rehearsals change nothing.
   assert.match(WF, /gh release create/);
   assert.match(WF, /--generate-notes/);
+  // Boolean gates must use the boolean form — API-dispatched boolean inputs
+  // coerce unpredictably in `!= 'true'` string comparisons (caught live on a
+  // dry-run dispatch: the commit step ran anyway).
   assert.ok(
-    (WF.match(/inputs\.dry_run != 'true'/g) ?? []).length >= 2,
-    "dry_run must gate both the tag step and the tap-pr job"
+    (WF.match(/if: \$\{\{ !inputs\.dry_run \}\}/g) ?? []).length >= 3,
+    "dry_run must gate both release steps and the tap-pr job"
   );
+  assert.doesNotMatch(WF, /dry_run != 'true'/, "no string-comparison gates");
 
   // The tap PR: cross-repo checkout with the secret, formula bumped by the
   // tap's own updater in PR mode against the release tree (hashed locally —
