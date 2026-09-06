@@ -15,7 +15,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -272,17 +272,37 @@ test("prune refuses a remote delete when the tracking ref is gone", async () => 
 test("backup paths stay inside the repo when invoked from a subdirectory", async () => {
   const f = fixture();
   try {
+    // git returns canonical paths (realpath, expanded 8.3 short names on
+    // Windows, normalized separators) while Node's tmpdir path is lexical
+    // (/tmp -> /private/tmp on macOS, RUNNER~1 -> runneradmin on Windows).
+    // Compare canonical forms so the assertion tests the directory, not
+    // the spelling of the temp path. The backup dir may not exist yet at
+    // the list step, so canonicalize what exists and compare the rest
+    // lexically — both sides derive from the same base, so equality still
+    // holds.
+    const canon = (p) => {
+      try {
+        return realpathSync(p).replace(/\\/g, "/");
+      } catch {
+        return p.replace(/\\/g, "/");
+      }
+    };
+
     const sub = join(f.work, "src");
     mkdirSync(sub, { recursive: true });
 
     const meta = repoMeta(sub);
-    assert.equal(meta.root, f.work);
-    assert.equal(meta.gitDir, join(f.work, ".git"), "git dir must resolve against the caller cwd");
+    assert.equal(canon(meta.root), canon(f.work));
+    assert.equal(
+      canon(meta.gitDir),
+      canon(join(f.work, ".git")),
+      "git dir must resolve against the caller cwd"
+    );
 
     const cfg = defaults();
     // listBackupFiles resolves the dir from the subdir too.
     const doc = listBackupFiles(sub, cfg);
-    assert.equal(doc.dir, join(f.work, ".git", "git-cleanup-backups"));
+    assert.equal(canon(doc.dir), canon(join(f.work, ".git", "git-cleanup-backups")));
 
     // End to end: force-prune from the subdir writes the bundle in the
     // repo's own backup dir (old code wrote it one level up).
@@ -292,7 +312,11 @@ test("backup paths stay inside the repo when invoked from a subdirectory", async
     const summary = await pruneRepo(repo, cfg, { yes: true });
     assert.ok(summary.deletedLocal.includes("wip/stale"), String(summary.deletedLocal));
     const bk = summary.backups[0];
-    assert.equal(dirname(bk.file), join(f.work, ".git", "git-cleanup-backups"), bk.file);
+    assert.equal(
+      canon(dirname(bk.file)),
+      canon(join(f.work, ".git", "git-cleanup-backups")),
+      bk.file
+    );
     assert.ok(existsSync(bk.file), "bundle written");
   } finally {
     f.cleanup();
