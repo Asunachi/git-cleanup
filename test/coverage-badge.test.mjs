@@ -19,6 +19,12 @@ import { colorFor, parseCoverage } from "../support/coverage-badge.mjs";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = join(root, "support", "coverage-badge.mjs");
 
+// --test-coverage-include exists on Node >= 21 (the pages workflow pins 22).
+// On older Nodes the script refuses to run — correctly, since without the
+// include filter the number would count the tests themselves — so the e2e
+// tests skip there; the parse/color unit tests above run everywhere.
+const HAS_INCLUDE_FLAG = Number(process.versions.node.split(".")[0]) >= 21;
+
 // The inner `node --test` the script spawns would otherwise be skipped: the
 // outer test runner marks its children with NODE_TEST_CONTEXT, and Node
 // refuses recursive test runs from inside a test file ("skipping running
@@ -113,7 +119,11 @@ function fixture(opts = {}) {
   return dir;
 }
 
-test("generateBadge: writes the shields.io payload from a real coverage run", () => {
+test("generateBadge: writes the shields.io payload from a real coverage run", (t) => {
+  if (!HAS_INCLUDE_FLAG) {
+    t.skip("needs --test-coverage-include (Node >= 21)");
+    return;
+  }
   const dir = fixture();
   const out = join(dir, "badge.json");
   try {
@@ -137,7 +147,11 @@ test("generateBadge: writes the shields.io payload from a real coverage run", ()
   }
 });
 
-test("generateBadge: a failing suite writes nothing and exits 1", () => {
+test("generateBadge: a failing suite writes nothing and exits 1", (t) => {
+  if (!HAS_INCLUDE_FLAG) {
+    t.skip("needs --test-coverage-include (Node >= 21)");
+    return;
+  }
   const dir = fixture({ fail: true });
   const out = join(dir, "badge.json");
   try {
