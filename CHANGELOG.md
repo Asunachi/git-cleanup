@@ -4,59 +4,6 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- A 60-second walkthrough video (`demo.mp4`, H.264, 1280×720) embedded at
-  the top of the README. It is built from real terminal output captured on
-  a clone of facebook/react (969 branches, no token, git evidence only):
-  `scan` (198 prunable / 727 stale / 56 kept) → `prune` (bundle-safe,
-  11 squash/rebase branches backed up before deletion) → `backup list` →
-  `backup restore` (all 11 branches back at their exact commits, verified
-  by hash). A timed on-screen narration strip walks through each scene;
-  the frame generator renders from captured transcripts, so every line on
-  screen is real output.
-- A dedicated Homebrew tap repository, `homebrew-git-cleanup/` in this
-  tree — the content of `github.com/Asunachi/homebrew-git-cleanup` (tap
-  name `Asunachi/git-cleanup`). Homebrew taps must live in a
-  `homebrew-`-prefixed repository, so a formula inside this repo could
-  never actually be tapped (`brew tap user/repo` maps to
-  `user/homebrew-<repo>`); the formula now has its own home and this repo
-  ships no copy of it, so the two can't drift. The tap's
-  `update-formula` workflow (daily poll + manual dispatch, zero secrets)
-  rewrites the formula's version and sha256 from each new upstream
-  release, replacing the manual release chore. Install is unchanged:
-  `brew tap Asunachi/git-cleanup && brew install git-cleanup`.
-- A Bitbucket Server / Data Center forge provider behind the forge
-  contract, for self-hosted instances: `stash.internal`, `bitbucket.corp`,
-  or any host claimed via `forge.hosts` (`{ "stash.internal":
-  "bitbucket-server" }`). Hostnames containing `bitbucket` other than
-  `bitbucket.org` are assumed to be Server. It speaks the Server REST
-  dialect — `/rest/api/1.0`, `isLastPage`/`nextPageStart` pagination,
-  epoch-ms dates, `fromRef` branch keys, versioned declines for `prs
-  --close`, and a loud "no issues support" failure for report-issue (its
-  issues live in Jira). Server remotes authenticate with the same
-  `BITBUCKET_TOKEN` as Cloud, and `doctor` reports them correctly.
-- The GitHub Pages deploy (`pages.yml`) now runs on every `v*` release tag
-  (in addition to `main` pushes and manual dispatch), so the playground at
-  asunachi.github.io/git-cleanup always mirrors the latest published
-  release. Before deploying it regenerates `index.html` from
-  `src/engine.mjs` and refuses to publish a page that drifted from the
-  committed bundle — the same freshness gate CI enforces per PR.
-- A one-button **release workflow** (`.github/workflows/release.yml`,
-  manual dispatch) that runs the full test suite, bumps `package.json` and
-  re-seeds the tap formula scaffold (`support/release/bump-version.mjs`:
-  semver math, a tag-reuse guard, and the sha256 of the packed release
-  tree), tags and pushes `vX.Y.Z`, publishes the GitHub Release, and files
-  the Homebrew tap update as a reviewable pull request (the tap updater's
-  new `RELEASE_PR` mode — bump on `release-<tag>`, push, open/confirm the
-  PR, never forked or duplicated on re-runs). A `dry_run` input rehearses
-  the whole pipeline without changing anything. The tap updater now also
-  re-verifies the pinned `sha256` against the release tarball on every run
-  and re-pins it if it drifted, so a release published from a different
-  tree can never leave `brew install` with a stale checksum.
-
 ## [0.3.0] - 2026-09-06
 
 ### Security
@@ -236,6 +183,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repo's `.git/git-cleanup-backups`), and the non-interactive
   confirmation error now says "nothing was restored" instead of the
   prune wording.
+- A 60-second walkthrough video (`demo.mp4`, H.264, 1280×720) embedded at
+  the top of the README. It is built from real terminal output captured on
+  a clone of facebook/react (969 branches, no token, git evidence only):
+  `scan` (198 prunable / 727 stale / 56 kept) → `prune` (bundle-safe,
+  11 squash/rebase branches backed up before deletion) → `backup list` →
+  `backup restore` (all 11 branches back at their exact commits, verified
+  by hash). A timed on-screen narration strip walks through each scene;
+  the frame generator renders from captured transcripts, so every line on
+  screen is real output.
+- A dedicated Homebrew tap repository, `homebrew-git-cleanup/` in this
+  tree — the content of `github.com/Asunachi/homebrew-git-cleanup` (tap
+  name `Asunachi/git-cleanup`). Homebrew taps must live in a
+  `homebrew-`-prefixed repository, so a formula inside this repo could
+  never actually be tapped (`brew tap user/repo` maps to
+  `user/homebrew-<repo>`); the formula now has its own home and this repo
+  ships no copy of it, so the two can't drift. The tap's
+  `update-formula` workflow (daily poll + manual dispatch, zero secrets)
+  rewrites the formula's version and sha256 from each new upstream
+  release, replacing the manual release chore. Install is unchanged:
+  `brew tap Asunachi/git-cleanup && brew install git-cleanup`.
+- A Bitbucket Server / Data Center forge provider behind the forge
+  contract, for self-hosted instances: `stash.internal`, `bitbucket.corp`,
+  or any host claimed via `forge.hosts` (`{ "stash.internal":
+  "bitbucket-server" }`). Hostnames containing `bitbucket` other than
+  `bitbucket.org` are assumed to be Server. It speaks the Server REST
+  dialect — `/rest/api/1.0`, `isLastPage`/`nextPageStart` pagination,
+  epoch-ms dates, `fromRef` branch keys, versioned declines for `prs
+  --close`, and a loud "no issues support" failure for report-issue (its
+  issues live in Jira). Server remotes authenticate with the same
+  `BITBUCKET_TOKEN` as Cloud, and `doctor` reports them correctly.
+- The GitHub Pages deploy (`pages.yml`) now runs on every `v*` release tag
+  (in addition to `main` pushes and manual dispatch), so the playground at
+  asunachi.github.io/git-cleanup always mirrors the latest published
+  release. Before deploying it regenerates `index.html` from
+  `src/engine.mjs` and refuses to publish a page that drifted from the
+  committed bundle — the same freshness gate CI enforces per PR.
+- A one-button **release workflow** (`.github/workflows/release.yml`,
+  manual dispatch) that runs the full test suite, bumps `package.json` and
+  re-seeds the tap formula scaffold (`support/release/bump-version.mjs`:
+  semver math, a tag-reuse guard, and the sha256 of the packed release
+  tree), tags and pushes `vX.Y.Z`, publishes the GitHub Release, and files
+  the Homebrew tap update as a reviewable pull request (the tap updater's
+  new `RELEASE_PR` mode — bump on `release-<tag>`, push, open/confirm the
+  PR, never forked or duplicated on re-runs). A `dry_run` input rehearses
+  the whole pipeline without changing anything. The tap updater now also
+  re-verifies the pinned `sha256` against the release tarball on every run
+  and re-pins it if it drifted, so a release published from a different
+  tree can never leave `brew install` with a stale checksum.
 
 ### Changed
 
