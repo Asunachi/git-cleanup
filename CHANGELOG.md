@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A JSON Schema for the config file (`support/config.schema.json`, draft-07,
+  shipped in the npm package): editors get autocomplete and inline validation
+  for `~/.config/git-cleanup/config.json`, `.gitcleanup.json`, and `--config`
+  files — add `"$schema"` pointing at the file, or register it in your
+  editor's JSON settings. Unknown keys are flagged (the loader ignores them,
+  so the schema turns silent typos into red squiggles), the `forge.hosts`
+  enum matches the registered providers exactly, and a structural test
+  (`test/config-schema.test.mjs`) fails if the loader or defaults ever grow
+  a key the schema does not know.
+
+### Fixed
+
+- The release workflow's downstream checks never ran: push events created
+  with GitHub's automatic `GITHUB_TOKEN` do not trigger other workflows,
+  so the release commit and `v*` tag were never picked up by CI, the Pages
+  deploy, or `release-check` — v0.4.0 shipped without `release-check` ever
+  running on it. The workflow now dispatches `release-check` (on the new
+  tag) and the Pages deploy (on `main`) explicitly right after the push —
+  `workflow_dispatch` is allowed from `GITHUB_TOKEN`, so no extra secret —
+  and CONTRIBUTING's runbook documents the behavior.
+
 ## [0.4.0] - 2026-09-06
 
 ### Security

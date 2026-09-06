@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/Asunachi/git-cleanup/main/support/config.schema.json",
+  "title": "git-cleanup configuration",
+  "description": "Schema for ~/.config/git-cleanup/config.json, .gitcleanup.json, or a --config file. All keys optional — unspecified keys fall through to the next config layer or the built-in defaults. Unknown keys are ignored by the loader but flagged here to catch typos.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor hint only (e.g. https://raw.githubusercontent.com/Asunachi/git-cleanup/main/support/config.schema.json). Ignored by git-cleanup."
+    },
+    "deleteMergedAfterDays": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Age in days after which merged branches are pruned."
+    },
+    "warnUnmergedAfterDays": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Age in days after which unmerged branches are reported as stale."
+    },
+    "pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "track": {
+          "type": "boolean",
+          "description": "Enrich branches with pull-request state from the forge."
+        },
+        "staleAfterDays": {
+          "type": "number",
+          "minimum": 0,
+          "description": "PRs with no activity for this many days are listed as stale."
+        },
+        "closeStaleAfterDays": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Stale PRs older than this may be closed by `prs --close`."
+        },
+        "closeComment": {
+          "type": "string",
+          "description": "Comment posted when `prs --close` closes a PR."
+        }
+      }
+    },
+    "remote": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pruneMerged": {
+          "type": "boolean",
+          "description": "Delete merged branches on the remote too (with `--remote`)."
+        },
+        "deleteAbandonedAfterDays": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Remote branches with a closed PR this old are candidates for deletion."
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Write a git bundle before force/remote deletions (default true)."
+        },
+        "dir": {
+          "type": "string",
+          "description": "Backup bundle directory (default <git dir>/git-cleanup-backups)."
+        },
+        "retainDays": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Sweep backup bundles older than this many days on every run (0 = keep forever)."
+        }
+      }
+    },
+    "forge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hosts": {
+          "type": "object",
+          "description": "Claim self-hosted forge hostnames, e.g. { \"git.example.com\": \"gitlab\" }. An explicit mapping always wins over hostname heuristics.",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["github", "gitlab", "bitbucket", "bitbucket-server", "gitea"]
+          }
+        }
+      }
+    },
+    "sweep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["report", "prune"],
+          "description": "Default sweep policy: \"report\" never deletes (default), \"prune\" goes through the same confirmation gate as `prune`."
+        },
+        "remote": {
+          "type": "boolean",
+          "description": "Prune remote branches in sweep mode \"prune\"."
+        },
+        "reportFile": {
+          "type": "string",
+          "description": "Write the combined sweep markdown report to this file."
+        },
+        "reportIssue": {
+          "description": "Post the report as a forge issue: true (default title) or { \"title\": \"...\" }.",
+          "oneOf": [
+            { "type": "boolean", "enum": [true] },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title"],
+              "properties": {
+                "title": { "type": "string" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "protected": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns of branches that are never touched (defaults: main, master, develop, release/**, staging, qa, checked-out and base branches)."
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["match"],
+        "properties": {
+          "match": {
+            "type": "string",
+            "description": "Branch glob pattern this rule applies to."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["merged", "any"],
+            "description": "\"merged\" only prunes merged branches; \"any\" prunes unmerged work too (dangerous — requires explicit rules)."
+          },
+          "minAgeDays": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Minimum branch age in days before the rule applies."
+          }
+        }
+      }
+    },
+    "repos": {
+      "type": "array",
+      "description": "Repositories to sweep. Paths resolve relative to the config file that defines them.",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": { "type": "string" },
+              "mode": {
+                "type": "string",
+                "enum": ["report", "prune"],
+                "description": "Per-repo sweep mode override."
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

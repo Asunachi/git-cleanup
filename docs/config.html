@@ -33,6 +33,10 @@
     <li>a file passed via <code>--config &lt;file&gt;</code></li>
   </ol>
   <p>Invalid values are rejected loudly at startup — never silently ignored.</p>
+  <p>Editors get autocomplete and inline validation from the JSON Schema at
+  <code>support/config.schema.json</code> (shipped in the npm package): add
+  <code>"$schema": "https://raw.githubusercontent.com/Asunachi/git-cleanup/main/support/config.schema.json"</code>
+  to your config file, or register the schema with your editor's JSON settings.</p>
 
   <h2>Full schema</h2>
   <pre><code>{

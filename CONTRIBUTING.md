@@ -200,8 +200,11 @@ gone by construction).
      (`support/release/bump-version.mjs`; the sha256 comes from `npm pack`
      of the release tree — deterministic for a fixed Node version, so the
      workflow pins Node 26 for its packing steps and its publish job);
-   - commits `Release X.Y.Z`, tags `vX.Y.Z` (annotated), and pushes both
-     — which triggers `release-check` and the Pages deploy automatically;
+   - commits `Release X.Y.Z`, tags `vX.Y.Z` (annotated), and pushes both;
+     push events created by the workflow's own `GITHUB_TOKEN` do **not**
+     trigger other workflows, so it then dispatches `release-check` on
+     the new tag and the Pages deploy on `main` explicitly
+     (`workflow_dispatch` is allowed from `GITHUB_TOKEN`);
    - creates the GitHub Release from the tag;
    - publishes to npm (`npm publish --provenance --access public` with
      `id-token: write`, Node 26, from the tag) — the full test suite runs
@@ -219,7 +222,9 @@ gone by construction).
    the suite and lists the tarball contents), but it does not upload.
 5. **Verify the tarball on every OS before announcing the release.** The
    `release-check` workflow (`.github/workflows/release-check.yml`) runs
-   automatically when the `v*` tag is pushed: it packs the exact tree the
+   automatically when a `v*` tag is pushed — and is dispatched by the
+   release workflow right after its own tag push (the workflow's token
+   cannot trigger tag workflows on its own): it packs the exact tree the
    tag points at, installs the tarball into a temp prefix, and runs the
    installed CLI (`--version`, `--help`, and a real `scan --check`) on
    Linux, macOS, and Windows. Wait for all three jobs to pass before

@@ -52,6 +52,11 @@ jobs:
   release:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      # Dispatching the downstream checks (workflow_dispatch API) needs the
+      # actions scope; contents stays for the commit/tag/Release.
+      contents: write
+      actions: write
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -107,6 +112,23 @@ jobs:
         run: |
           VERSION="${{ steps.bump.outputs.version }}"
           gh release create "v${VERSION}" --title "git-cleanup ${VERSION}" --generate-notes
+
+      # Push events created by GITHUB_TOKEN do NOT trigger other workflows
+      # (documented GitHub behavior), so the commit/tag pushes above spawn no
+      # CI, pages, or release-check runs on their own — v0.4.0 shipped with
+      # release-check never having run on it. workflow_dispatch IS allowed
+      # from GITHUB_TOKEN, so dispatch the downstream checks explicitly; no
+      # extra secret needed.
+      - name: Dispatch downstream checks
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          gh workflow run release-check.yml --ref "v${VERSION}"
+          gh workflow run pages.yml --ref main
+          echo "dispatched release-check (v${VERSION}) and pages (main)"
 
   # Publish to npm from CI with Sigstore provenance. Provenance can only be
   # minted in CI (the OIDC token is bound to this run), so a local `npm

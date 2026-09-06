@@ -29,6 +29,7 @@
     "src",
     "support/completions",
     "support/dotfiles",
+    "support/config.schema.json",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

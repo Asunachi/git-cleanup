@@ -62,10 +62,23 @@ test("release workflow: dispatch-only, inputs, permissions, and job chain", () =
   // coerce unpredictably in `!= 'true'` string comparisons (caught live on a
   // dry-run dispatch: the commit step ran anyway).
   assert.ok(
-    (WF.match(/if: \$\{\{ !inputs\.dry_run \}\}/g) ?? []).length >= 3,
-    "dry_run must gate both release steps and the tap-pr job"
+    (WF.match(/if: \$\{\{ !inputs\.dry_run \}\}/g) ?? []).length >= 4,
+    "dry_run must gate the release steps, the dispatch step, and the tap-pr job"
   );
   assert.doesNotMatch(WF, /dry_run != 'true'/, "no string-comparison gates");
+
+  // Push events created by GITHUB_TOKEN do not trigger other workflows, so
+  // the release commit/tag would never be CI'd, released-checked, or deployed
+  // without an explicit dispatch — which IS allowed from GITHUB_TOKEN. The
+  // dispatch API needs the actions scope, so the release job carries its own
+  // permissions (contents + actions), scoped tight to the job.
+  assert.match(WF, /Dispatch downstream checks/);
+  assert.match(WF, /gh workflow run release-check\.yml --ref "v\$\{VERSION\}"/);
+  assert.match(WF, /gh workflow run pages\.yml --ref main/);
+  assert.match(
+    WF,
+    /permissions:\s*\n(?:\s*#[^\n]*\n)*\s+contents: write\s*\n\s+actions: write/
+  );
 
   // The tap PR: cross-repo checkout with the secret, formula bumped by the
   // tap's own updater in PR mode against the release tree (hashed locally —

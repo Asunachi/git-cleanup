@@ -84,7 +84,7 @@ not in a tutorial:
 | Five forge providers behind one contract (`src/forge.mjs` + `src/providers/`) | API integration — REST dialects, auth, pagination — and abstraction design: a new forge is one file plus one registry line |
 | Zero npm dependencies, Node built-ins only | Dependency discipline: deliberate, documented, and lint-enforced |
 | Bundle-before-delete pruning with confirmation gates | Safety-critical design: irreversible operations made recoverable, auditable, and dry-runnable |
-| 243 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and golden histories (rebase/cherry-pick/octopus) |
+| 248 unit + integration + fuzz tests, structural tests pinning CI/templates/schema so they can't drift | Testing at every level, including seeded fuzz and golden histories (rebase/cherry-pick/octopus) |
 | CI on 3 OS × 3 Node versions, a release workflow, an auto-updating Homebrew tap, GitHub Pages | CI/CD and distribution: GitHub Actions, npm packaging, Homebrew, Pages |
 | CONTRIBUTING with a real release runbook, SECURITY.md, Keep-a-Changelog, 60-second demo video | Documentation that treats the next contributor and reviewer as first-class users |
 
@@ -481,6 +481,12 @@ Config files merge in this order (later wins):
 3. `.gitcleanup.json` (or `.git-cleanup.json`), found by walking up from the
    current directory — perfect for per-repo rules
 4. a file passed via `--config <file>`
+
+Editors get autocomplete and inline validation from the JSON Schema at
+[`support/config.schema.json`](support/config.schema.json) (shipped in the npm
+package) — add `"$schema":
+"https://raw.githubusercontent.com/Asunachi/git-cleanup/main/support/config.schema.json"`
+to your config file, or register the schema with your editor's JSON settings.
 
 ```jsonc
 {
