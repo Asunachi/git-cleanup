@@ -199,6 +199,7 @@
       <span>git only — never touches <b>.git</b> internals</span>
       <span>GitHub <b>+ GitLab</b> PR enrichment</span>
       <span><b>204</b> tests · CI on <b>Linux / macOS / Windows</b></span>
+      <span id="cov-badge" style="display:none" title="live coverage of src/, measured by the pages deploy using Node's built-in test coverage">coverage: <b>…</b></span>
       <span class="hot">squash/rebase-aware detection</span>
       <span class="hot">recoverable deletions (git bundles)</span>
     </div>
@@ -906,6 +907,44 @@ function classifyBranch(branch, cfg, ctx) {
 
   render();
   renderGlob();
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+  // Live coverage chip: the pages deploy serves coverage.json — the same
+  // payload behind the README badge, measured from src/ only — on the same
+  // origin as this page, so a plain fetch fills the chip with the deployed
+  // tree's real numbers. On failure (file:// open, offline, mid-deploy) the
+  // chip stays hidden: it is an enhancement to the demo, never a blocker.
+  var COLORS = {
+    brightgreen: "#4c1",
+    green: "#97ca00",
+    yellowgreen: "#a4a61d",
+    yellow: "#dfb317",
+    orange: "#fe7d37",
+    red: "#e05d44"
+  };
+  var el = document.getElementById("cov-badge");
+  if (!el) return;
+  fetch("coverage.json", { cache: "no-store" })
+    .then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(function (d) {
+      var b = el.querySelector("b");
+      if (!b || !d || typeof d.message !== "string") return;
+      b.textContent = d.message;
+      if (typeof d.color === "string" && COLORS[d.color]) {
+        b.style.color = COLORS[d.color];
+      }
+      el.style.display = "";
+    })
+    .catch(function () {
+      // leave the chip hidden
+    });
 })();
 </script>
 </body>

@@ -316,6 +316,12 @@ test("page's test-count badge matches the suite", () => {
     new RegExp(`# ${total} unit \\+ integration tests`),
     `run-it-yourself snippet must claim ${total} tests`
   );
+
+  // The live coverage chip fetches the payload the pages deploy serves on
+  // the same origin; pin the contract so the page and the deploy cannot
+  // drift apart (the chip stays hidden until the fetch succeeds).
+  assert.match(html, /id="cov-badge"/, "page carries the live coverage chip");
+  assert.match(html, /fetch\("coverage\.json"/, "chip fetches the deployed coverage payload");
 });
 
 test("page bundle vs engine: classifyRemote agrees", () => {
