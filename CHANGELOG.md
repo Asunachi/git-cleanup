@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `npm publish --dry-run` — the documented release rehearsal — now passes
+  its own suite again: the outer `--dry-run` leaked into the nested `npm
+  pack` through `npm_config_dry_run=true`, so the pack exited 0 and wrote
+  no tarball, failing the bump-engine test on a missing file (verified
+  live: with the flag leaked, `npm pack` prints the tarball name and
+  writes zero bytes). The nested pack now spawns with a cleaned env (no
+  `npm_config_*`), so the outer npm's config can never silently alter the
+  sha256 the release workflow re-seeds into the tap formula.
 - PR/MR pagination is no longer silently truncated at 500 items. The
   GitHub REST provider follows the `Link` header (GitLab: `x-next-page`)
   up to a safety cap of 2,000 PRs, and the `gh` CLI path asks for one more

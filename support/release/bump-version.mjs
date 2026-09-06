@@ -38,6 +38,22 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+/**
+ * Spawn env for the nested `npm pack`: strip every npm_config_* variable the
+ * outer npm injects. `npm publish --dry-run` leaks npm_config_dry_run=true,
+ * which makes the nested pack dry-run too — exit 0, tarball name printed,
+ * nothing written (verified live) — so the rehearsal fails its own suite and
+ * the pin silently never exists. The nested npm must see only its CLI args
+ * and .npmrc, whatever the outer command was.
+ */
+function packEnv() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("npm_config_")) delete env[key];
+  }
+  return env;
+}
+
 const PKG_PATH = join(process.cwd(), "package.json");
 const FORMULA_PATH = join(
   process.cwd(),
@@ -108,6 +124,7 @@ const tmp = mkdtempSync(join(tmpdir(), "gc-bump-"));
 try {
   const pack = spawnSync(packCmd, [...packArgs, tmp], {
     encoding: "utf8",
+    env: packEnv(),
   });
   if (pack.status !== 0) {
     fail(`npm pack failed:\n${pack.stderr || pack.stdout}`);

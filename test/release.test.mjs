@@ -27,6 +27,16 @@ const BUMP = join(root, "support", "release", "bump-version.mjs");
 const npmExec = process.env.npm_execpath;
 const packCmd = npmExec ? process.execPath : "npm";
 const packArgs = npmExec ? [npmExec, "pack", "--pack-destination"] : ["pack", "--pack-destination"];
+// The nested pack must not inherit the outer npm's config: under `npm
+// publish --dry-run`, npm_config_dry_run=true leaks in and the pack dry-runs
+// (exit 0, no tarball written). Same cleaning as bump-version.mjs.
+function packEnv() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("npm_config_")) delete env[key];
+  }
+  return env;
+}
 const ORIG_PKG = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const ORIG_FORMULA = readFileSync(
   join(root, "homebrew-git-cleanup", "Formula", "git-cleanup.rb"),
@@ -166,6 +176,7 @@ test("bump-version: real run bumps package.json and re-seeds the tap formula wit
       const pack = spawnSync(packCmd, [...packArgs, packDir], {
         cwd: dir,
         encoding: "utf8",
+        env: packEnv(),
       });
       assert.equal(pack.status, 0, pack.stderr);
       const tarball = pack.stdout.trim().split("\n").pop();

@@ -16,7 +16,7 @@ class GitCleanup < Formula
   desc "Prune stale/merged Git branches, cross-referenced with PR status"
   homepage "https://github.com/Asunachi/git-cleanup"
   url "https://registry.npmjs.org/@maliqkara/gitcleanup/-/gitcleanup-0.3.0.tgz"
-  sha256 "6c4de448eba272ec658a531b0fe2b60060e5f064c69d2d7570753f191cb4401c"
+  sha256 "b0ebb9462cbb345912eee9c795e0390217e97e7b74ce6f4b3fcd5393738d87e5"
   license "MIT"
 
   depends_on "node"
