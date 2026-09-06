@@ -20,9 +20,17 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
-// npm is npm.cmd on Windows; CreateProcess does not resolve PATHEXT, so the
-// bare name would ENOENT there (caught on the Windows CI matrix).
-const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+// Spawning npm on Windows is a trap: the bare name ENOENTs (CreateProcess
+// does not resolve PATHEXT) and .cmd files refuse to spawn without a shell
+// (EINVAL), where shell-quoted args are their own quoting hazard. When we
+// run under `npm test`, npm tells us its own CLI JS via npm_execpath — spawn
+// that with node directly, no .cmd, no shell. Elsewhere (the release
+// workflow, ubuntu) plain `npm` works.
+const npmExec = process.env.npm_execpath;
+const packCmd = npmExec ? process.execPath : "npm";
+const packArgs = npmExec
+  ? [npmExec, "pack", "--pack-destination"]
+  : ["pack", "--pack-destination"];
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -95,7 +103,7 @@ writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + "\n");
 // --- 2. pack the exact tree and hash the tarball --------------------------
 const tmp = mkdtempSync(join(tmpdir(), "gc-bump-"));
 try {
-  const pack = spawnSync(NPM, ["pack", "--pack-destination", tmp], {
+  const pack = spawnSync(packCmd, [...packArgs, tmp], {
     encoding: "utf8",
   });
   if (pack.status !== 0) {
