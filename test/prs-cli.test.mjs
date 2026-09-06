@@ -578,7 +578,7 @@ test("prs --close --yes closes stale PRs through the real gh CLI path", {
   }
 });
 
-test("a forge API that never responds times out instead of hanging the run", async () => {
+test("a forge API that never responds times out instead of hanging the run", { timeout: 10000 }, async () => {
   // Shell hooks and cron jobs must never hang on a dead network: the fetch
   // timeout (GIT_CLEANUP_FETCH_TIMEOUT_MS) turns a stuck API call into an
   // honest "PR lookup failed" error entry.
@@ -588,12 +588,20 @@ test("a forge API that never responds times out instead of hanging the run", asy
     process.env = { ...env.env, GIT_CLEANUP_FETCH_TIMEOUT_MS: "100" };
     // A fetch that never settles — but, like the real one, honors the abort
     // signal the timeout helper passes (a signal-ignoring stub would hang
-    // forever and prove nothing).
+    // forever and prove nothing). AbortSignal.timeout's own timer is
+    // unref'd: it does not hold the event loop open, so with nothing else
+    // pending the process would drain before the 100ms abort could fire and
+    // the runner would cancel this test ("Promise resolution is still
+    // pending"). A keepalive timer holds the loop until the fetch settles;
+    // the runner-level timeout above turns a genuinely broken abort into a
+    // loud failure instead of a hang.
     const run = stubRun((url, init) =>
       new Promise((resolve, reject) => {
-        init?.signal?.addEventListener("abort", () =>
-          reject(init.signal.reason ?? new Error("aborted"))
-        );
+        const keepalive = setTimeout(() => {}, 2 ** 31 - 1);
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(keepalive);
+          reject(init.signal.reason ?? new Error("aborted"));
+        });
       })
     );
     let code;
