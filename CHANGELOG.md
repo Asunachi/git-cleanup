@@ -254,12 +254,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A **test-coverage badge**: `npm run coverage` runs the suite under
   Node's built-in `--experimental-test-coverage` (zero dependencies) and
   writes `coverage.json` — the shields.io endpoint payload the README
-  badge renders. Coverage is measured over `src/` only, never the tests
-  themselves, and a failing suite writes nothing and exits 1. The file is
-  not committed: the Pages deploy recomputes it and serves it from the
-  site (`https://asunachi.github.io/git-cleanup/coverage.json`), so the
-  badge always describes exactly the tree the playground publishes — and
-  the deploy now refuses to publish a tree whose suite fails.
+  badge renders — plus `coverage-raw.json` with the precise percentages.
+  Coverage is measured over `src/` only, never the tests themselves, and a
+  failing suite writes nothing and exits 1. The files are not committed:
+  the Pages deploy recomputes them and serves them from the site
+  (`https://asunachi.github.io/git-cleanup/coverage.json`), so the badge
+  always describes exactly the tree the playground publishes — and the
+  deploy now refuses to publish a tree whose suite fails.
+- A **coverage gate in CI** (`coverage-gate` job): PRs and pushes that
+  drop `src/` line coverage below the last deployed baseline fail the
+  build, so new code without tests can't land silently. The gate measures
+  the same way the deploy does (Node 22, default fuzz volume) and reads
+  the baseline from the deployed `coverage-raw.json`, falling back to the
+  badge's rounded message when the raw file predates it; an unreadable
+  baseline fails loudly rather than skipping. GitHub-only by design — the
+  baseline is this repository's deployed site.
 
 ### Changed
 

@@ -8,13 +8,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { colorFor, parseCoverage } from "../support/coverage-badge.mjs";
+import { colorFor, fetchBaseline, parseCoverage } from "../support/coverage-badge.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRIPT = join(root, "support", "coverage-badge.mjs");
@@ -100,23 +101,75 @@ function fixture(opts = {}) {
   const dir = mkdtempSync(join(tmpdir(), "gc-cov-"));
   mkdirSync(join(dir, "src"));
   mkdirSync(join(dir, "test"));
-  writeFileSync(
-    join(dir, "src", "fake.mjs"),
-    "export function pick(x) {\n  return x > 0 ? \"pos\" : \"neg\";\n}\n"
-  );
   if (opts.fail) {
+    writeFileSync(
+      join(dir, "src", "fake.mjs"),
+      "export function pick(x) {\n  return x > 0 ? \"pos\" : \"neg\";\n}\n"
+    );
     writeFileSync(
       join(dir, "test", "fake.test.mjs"),
       "import { test } from \"node:test\";\ntest(\"always fails\", () => {\n  throw new Error(\"boom\");\n});\n"
     );
+  } else if (opts.half) {
+    // One of two function bodies never runs: 66.67% lines (V8 counts the
+    // module-declaration lines as covered too), 100% branches.
+    writeFileSync(
+      join(dir, "src", "fake.mjs"),
+      "export function covered() {\n  return \"yes\";\n}\nexport function uncovered() {\n  return \"no\";\n}\n"
+    );
+    writeFileSync(
+      join(dir, "test", "fake.test.mjs"),
+      "import { test } from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { covered } from \"../src/fake.mjs\";\ntest(\"covers one of two functions\", () => {\n  assert.equal(covered(), \"yes\");\n});\n"
+    );
   } else {
     // Covers the whole line but only one branch arm: 100% lines, 50% branches.
+    writeFileSync(
+      join(dir, "src", "fake.mjs"),
+      "export function pick(x) {\n  return x > 0 ? \"pos\" : \"neg\";\n}\n"
+    );
     writeFileSync(
       join(dir, "test", "fake.test.mjs"),
       "import { test } from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { pick } from \"../src/fake.mjs\";\ntest(\"covers only the positive branch\", () => {\n  assert.equal(pick(1), \"pos\");\n});\n"
     );
   }
   return dir;
+}
+
+/**
+ * Run the badge script as a child process and resolve with its result.
+ * Async (not spawnSync): the gate tests serve the baseline from an HTTP stub
+ * in THIS process, so the parent's event loop must stay free while the child
+ * fetches it — a sync spawn would deadlock child-vs-parent.
+ */
+function runScript(args, cwd, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, { cwd, env });
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (err += d));
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ status: code, stdout: out, stderr: err }));
+  });
+}
+
+/** A tiny JSON HTTP stub; returns { port, close }. */
+async function stubServer(routes) {
+  const server = createServer((req, res) => {
+    const hit = routes[req.url];
+    if (!hit) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    res.writeHead(hit.status ?? 200, { "content-type": "application/json" });
+    res.end(JSON.stringify(hit.body ?? null));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    base: `http://127.0.0.1:${server.address().port}`,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
 }
 
 test("generateBadge: writes the shields.io payload from a real coverage run", (t) => {
@@ -142,9 +195,137 @@ test("generateBadge: writes the shields.io payload from a real coverage run", (t
     assert.equal(badge.label, "coverage");
     assert.match(badge.message, /^100% lines · \d+% branches$/);
     assert.equal(badge.color, "brightgreen"); // line >= 95
+    // The raw payload for the CI gate is written next to the badge.
+    const raw = JSON.parse(readFileSync(join(dirname(out), "coverage-raw.json"), "utf8"));
+    assert.equal(raw.line, 100);
+    assert.equal(typeof raw.branch, "number");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("fetchBaseline: prefers the raw payload, falls back to the badge message, fails loudly", async () => {
+  const stub = await stubServer({
+    "/coverage-raw.json": { body: { line: 94.51, branch: 80.72 } },
+    "/coverage.json": { body: { message: "99% lines · 81% branches" } },
+  });
+  try {
+    const raw = await fetchBaseline(`${stub.base}/coverage-raw.json`);
+    assert.equal(raw.line, 94.51);
+    assert.equal(raw.via, "coverage-raw.json");
+
+    // Raw missing (or predating raw numbers): the rounded badge message wins.
+    const onlyBadge = await stubServer({
+      "/coverage-raw.json": { status: 404 },
+      "/coverage.json": { body: { message: "94% lines · 81% branches" } },
+    });
+    try {
+      const fallback = await fetchBaseline(`${onlyBadge.base}/coverage-raw.json`);
+      assert.equal(fallback.line, 94);
+      assert.equal(fallback.via, "badge message");
+    } finally {
+      await onlyBadge.close();
+    }
+
+    // Neither readable: loud failure, never a silent pass.
+    const dead = await stubServer({ "/coverage.json": { status: 500 } });
+    try {
+      await assert.rejects(
+        () => fetchBaseline(`${dead.base}/coverage-raw.json`),
+        /cannot fetch the deployed coverage baseline/
+      );
+    } finally {
+      await dead.close();
+    }
+  } finally {
+    await stub.close();
+  }
+});
+
+test("coverage gate: a drop below the deployed baseline exits 1, parity passes", async (t) => {
+  if (!HAS_INCLUDE_FLAG) {
+    t.skip("needs --test-coverage-include (Node >= 21)");
+    return;
+  }
+  const dir = fixture({ half: true }); // 66.67% lines
+  const run = async (baselineLine) => {
+    const stub = await stubServer({
+      "/coverage-raw.json": { body: { line: baselineLine } },
+    });
+    try {
+      // await INSIDE the try: `return somePromise` in a try/finally runs the
+      // finally immediately (it does not await the returned promise), which
+      // would close the stub before the child's fetch — ECONNREFUSED.
+      return await runScript(
+        [
+          SCRIPT,
+          "--out",
+          join(dir, "badge.json"),
+          "--baseline-url",
+          `${stub.base}/coverage-raw.json`,
+          "--",
+          join(dir, "test", "fake.test.mjs"),
+        ],
+        dir,
+        plainEnv()
+      );
+    } finally {
+      await stub.close();
+    }
+  };
+  const fail = await run(75);
+  assert.equal(fail.status, 1);
+  assert.match(fail.stderr, /coverage regression: 66\.67% lines is below the deployed baseline 75%/);
+  const pass = await run(40);
+  assert.equal(pass.status, 0, pass.stderr);
+  assert.match(pass.stdout, /no regression/);
+});
+
+test("coverage gate: falls back to the badge message and fails loudly when nothing is reachable", async (t) => {
+  if (!HAS_INCLUDE_FLAG) {
+    t.skip("needs --test-coverage-include (Node >= 21)");
+    return;
+  }
+  const dir = fixture({ half: true }); // 66.67% lines
+  const run = async (routes) => {
+    const stub = await stubServer(routes);
+    try {
+      // await INSIDE the try — see the note in the sibling gate test: a
+      // bare `return` would run the finally (and close the stub) immediately.
+      return await runScript(
+        [
+          SCRIPT,
+          "--out",
+          join(dir, "badge.json"),
+          "--baseline-url",
+          `${stub.base}/coverage-raw.json`,
+          "--",
+          join(dir, "test", "fake.test.mjs"),
+        ],
+        dir,
+        plainEnv()
+      );
+    } finally {
+      await stub.close();
+    }
+  };
+
+  // Raw absent, badge message "40% lines": 66.67 >= 40, passes via the fallback.
+  const fbPass = await run({ "/coverage.json": { body: { message: "40% lines · 90% branches" } } });
+  assert.equal(fbPass.status, 0, fbPass.stderr);
+  assert.match(fbPass.stdout, /\(badge message\)/);
+
+  // Raw absent, badge message "60% lines": 66.67 < 60 is false, so instead
+  // the raw file stays the arbiter — the fallback must pass: use a badge
+  // message above the achieved coverage to prove the fallback drives the gate.
+  const fbFail = await run({ "/coverage.json": { body: { message: "90% lines · 90% branches" } } });
+  assert.equal(fbFail.status, 1);
+  assert.match(fbFail.stderr, /coverage regression: 66\.67% lines is below the deployed baseline 90% \(badge message\)/);
+
+  // Neither reachable: loud failure, never a silent pass.
+  const dead = await run({});
+  assert.equal(dead.status, 1);
+  assert.match(dead.stderr, /cannot fetch the deployed coverage baseline/);
 });
 
 test("generateBadge: a failing suite writes nothing and exits 1", (t) => {

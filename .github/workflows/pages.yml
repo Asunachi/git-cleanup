@@ -79,6 +79,7 @@ jobs:
           cp index.html _site/
           cp demo.svg _site/
           cp coverage.json _site/
+          cp coverage-raw.json _site/
 
       - uses: actions/upload-pages-artifact@v3
         with:

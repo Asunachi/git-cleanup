@@ -51,6 +51,27 @@ jobs:
             exit 1
           fi
 
+  # Untested code may not land silently: the gate measures src/ line coverage
+  # (same Node 22 and default fuzz volume as the pages deploy, so numbers are
+  # comparable) and fails when it drops below the last deployed baseline that
+  # the Pages site serves. GitHub-only by design — it depends on this repo's
+  # deployed baseline, which other projects' copies of .gitlab-ci.yml do not
+  # have.
+  coverage-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Reject coverage regressions vs the deployed baseline
+        shell: bash
+        run: |
+          node support/coverage-badge.mjs --out /tmp/gc-cov.json \
+            --baseline-url https://asunachi.github.io/git-cleanup/coverage-raw.json
+
   # The playground page bundles src/engine.mjs between __ENGINE__ markers via
   # `npm run sync:playground`. This is a content-identity check (engine change
   # => page copy must change in the same commit), so it runs once on Linux

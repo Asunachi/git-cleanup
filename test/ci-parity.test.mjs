@@ -42,10 +42,17 @@ test("ci.yml structure: expected top-level keys and sane YAML indentation", () =
   const top = code.filter((l) => l.indent === 0).map((l) => l.text.split(":")[0]);
   assert.deepEqual(top, ["name", "on", "concurrency", "jobs"]);
 
-  // Both jobs exist and the matrix covers 3 OSes × 3 Node versions.
+  // All three jobs exist and the matrix covers 3 OSes × 3 Node versions.
   const text = readFileSync(CI, "utf8");
   assert.match(text, /\n  test:\n/);
   assert.match(text, /\n  playground-fresh:\n/);
+  // The coverage gate compares against the deployed baseline on Node 22
+  // (same environment as the pages deploy, so numbers are comparable) and
+  // runs the shared badge script in gate mode.
+  assert.match(text, /\n  coverage-gate:\n/);
+  assert.match(text, /node-version: 22/);
+  assert.match(text, /--baseline-url/);
+  assert.match(text, /coverage-raw\.json/);
   assert.match(text, /os: \[ubuntu-latest, windows-latest, macos-latest\]/);
   assert.match(text, /node-version: \[18, 20, 22\]/);
   // Scheduled deep sweep + manual dispatch, mirroring the gitlab schedule.
@@ -194,5 +201,6 @@ test("pages.yml structure: deploys the playground on main pushes and dispatch", 
   // and the badge always describes the deployed tree.
   assert.match(text, /npm run coverage/);
   assert.match(text, /cp coverage\.json _site\//);
+  assert.match(text, /cp coverage-raw\.json _site\//);
   assert.ok(pkg.scripts["coverage"], "package.json has the coverage script pages.yml runs");
 });

@@ -28,12 +28,22 @@ The README's coverage badge is generated the same dependency-free way:
 `npm run coverage` runs the suite under Node's built-in
 `--experimental-test-coverage` (needs Node ≥ 21; measure only `src/`,
 never the tests) and writes `coverage.json`, the shields.io payload behind
-the badge. You don't commit that file — the Pages deploy
-(`.github/workflows/pages.yml`) recomputes it on every release/main push
-and serves it from the site, so the badge always matches the published
-tree. Locally it's useful to spot untested paths before pushing: `npm run
-coverage` prints the per-file table, and the badge payload's line/branch
-percentages are in `coverage.json`.
+the badge, plus `coverage-raw.json` with the precise percentages. You
+never commit those files — the Pages deploy
+(`.github/workflows/pages.yml`) recomputes them on every main push and
+serves them from the site, so the badge always matches the published tree.
+Locally `npm run coverage` is useful to spot untested paths before
+pushing: it prints the per-file table, and the precise numbers are in
+`coverage-raw.json`.
+
+CI enforces the number too: the `coverage-gate` job in
+`.github/workflows/ci.yml` re-measures coverage the same way (Node 22,
+default fuzz volume — the same environment as the Pages deploy, so
+numbers are comparable) and fails a PR or push whose `src/` line coverage
+drops below the last deployed baseline. It is GitHub-only by design: the
+baseline is this repository's deployed site, which other projects' copies
+of `.gitlab-ci.yml` don't have. Adding a file to `src/` without tests will
+fail the gate — add the tests in the same change.
 
 ## Code layout
 

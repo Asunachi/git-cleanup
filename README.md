@@ -80,7 +80,7 @@ not in a tutorial:
 | Five forge providers behind one contract (`src/forge.mjs` + `src/providers/`) | API integration — REST dialects, auth, pagination — and abstraction design: a new forge is one file plus one registry line |
 | Zero npm dependencies, Node built-ins only | Dependency discipline: deliberate, documented, and lint-enforced |
 | Bundle-before-delete pruning with confirmation gates | Safety-critical design: irreversible operations made recoverable, auditable, and dry-runnable |
-| 204 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and differential testing against real git history |
+| 207 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and differential testing against real git history |
 | CI on 3 OS × 3 Node versions, a release workflow, an auto-updating Homebrew tap, GitHub Pages | CI/CD and distribution: GitHub Actions, npm packaging, Homebrew, Pages |
 | CONTRIBUTING with a real release runbook, SECURITY.md, Keep-a-Changelog, 60-second demo video | Documentation that treats the next contributor and reviewer as first-class users |
 
@@ -602,7 +602,12 @@ npm run lint   # zero-dependency lint (syntax + whitespace invariants; runs in n
 and measures `src/` only — never the tests themselves — and refuses to write
 a badge if any test fails. The file isn't committed: the Pages deploy
 recomputes it and serves it for the README badge, so the number always
-matches the published tree (see `.github/workflows/pages.yml`).
+matches the published tree (see `.github/workflows/pages.yml`). CI also runs
+it as a **coverage gate**: PRs and pushes that drop `src/` line coverage
+below the last deployed baseline fail the build (`coverage-gate` job,
+GitHub-only — it needs this repo's deployed baseline, which other projects'
+copies of `.gitlab-ci.yml` don't have), so new code without tests can't land
+silently.
 
 Integration tests build a bare `origin` and a working clone with old merged
 branches, an orphaned branch, stale unmerged work, and protected branches,

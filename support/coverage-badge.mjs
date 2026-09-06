@@ -18,7 +18,18 @@
 // "File | % Lines | % Statements | % Functions | % Branches" and Node 26's
 // "file | line % | branch % | funcs %".
 //
-// Usage: node support/coverage-badge.mjs [--out <file>] [-- <node --test args>]
+// The badge payload (coverage.json) stays shields-compatible; the raw
+// percentages are written next to it as coverage-raw.json ({ line, branch })
+// so CI can gate precisely instead of reading rounded integers.
+//
+// Usage:
+//   node support/coverage-badge.mjs [--out <file>] [--baseline-url <url>] [-- <node --test args>]
+//
+// --baseline-url <url>  gate mode: fetch the deployed baseline (a
+//   coverage-raw.json URL; falls back to the badge payload's rounded line
+//   % when the raw file predates it or is unavailable) and exit 1 if this
+//   tree's line coverage drops below it — untested code can't land
+//   silently. Used by the ci.yml coverage-gate job.
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -107,7 +118,41 @@ export function runCoverage(extraArgs = []) {
   );
 }
 
-/** Run the suite, parse coverage, and write the badge payload. */
+/**
+ * Fetch the deployed line-coverage baseline for the gate.
+ *
+ * Prefers coverage-raw.json ({ line }); falls back to the badge payload's
+ * rounded "N% lines" message (the raw file predates it or is unavailable),
+ * and fails loudly when neither is readable. Returns { line, via }.
+ */
+export async function fetchBaseline(url) {
+  const badgeUrl = url.replace(/coverage-raw\.json$/, "coverage.json");
+  const read = async (u) => {
+    try {
+      const res = await fetch(u, { cache: "no-store" });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
+  const raw = await read(url);
+  if (raw && typeof raw.line === "number") {
+    return { line: raw.line, via: "coverage-raw.json" };
+  }
+  const badge = await read(badgeUrl);
+  const m = badge && typeof badge.message === "string"
+    ? badge.message.match(/^(\d+)% lines/)
+    : null;
+  if (m) {
+    return { line: Number(m[1]), via: "badge message" };
+  }
+  throw new Error(
+    `cannot fetch the deployed coverage baseline from ${url} (raw payload and badge both unreadable)`
+  );
+}
+
+/** Run the suite, parse coverage, and write the badge + raw payloads. */
 export function generateBadge(outFile, extraArgs = []) {
   const r = runCoverage(extraArgs);
   if (r.status !== 0) {
@@ -135,34 +180,63 @@ export function generateBadge(outFile, extraArgs = []) {
   };
   mkdirSync(dirname(outFile), { recursive: true });
   writeFileSync(outFile, `${JSON.stringify(payload, null, 2)}\n`);
-  return payload;
+  // Raw percentages for the CI gate (coverage-raw.json), rounded to 2dp so
+  // identical trees compare equal.
+  const raw = {
+    line: Math.round(line * 100) / 100,
+    branch: Math.round(branch * 100) / 100,
+  };
+  writeFileSync(
+    join(dirname(outFile), "coverage-raw.json"),
+    `${JSON.stringify(raw, null, 2)}\n`
+  );
+  return { payload, line, branch };
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   let out = join(root, "coverage.json");
+  let baselineUrl = null;
   const passthrough = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--out") {
       out = resolve(argv[++i]);
+    } else if (argv[i] === "--baseline-url") {
+      baselineUrl = argv[++i];
     } else if (argv[i] === "--") {
       passthrough.push(...argv.slice(i + 1));
       break;
     } else if (argv[i] === "--help") {
       console.log(
-        "usage: node support/coverage-badge.mjs [--out <file>] [-- <node --test args>]"
+        "usage: node support/coverage-badge.mjs [--out <file>] [--baseline-url <url>] [-- <node --test args>]"
       );
       return;
     } else {
       passthrough.push(argv[i]);
     }
   }
-  const payload = generateBadge(out, passthrough);
-  console.log(
-    `coverage: ${payload.message} → ${out} (${payload.color})`
-  );
+  const { payload, line } = generateBadge(out, passthrough);
+  if (baselineUrl) {
+    const baseline = await fetchBaseline(baselineUrl);
+    if (line < baseline.line) {
+      console.error(
+        `coverage regression: ${line.toFixed(2)}% lines is below the deployed baseline ` +
+          `${baseline.line}% (${baseline.via}) — new code shipped without tests. ` +
+          `Add tests, or move the untested code behind a tested seam.`
+      );
+      process.exit(1);
+    }
+    console.log(
+      `coverage gate: ${line.toFixed(2)}% lines ≥ deployed baseline ` +
+        `${baseline.line}% (${baseline.via}) — no regression`
+    );
+  }
+  console.log(`coverage: ${payload.message} → ${out} (${payload.color})`);
 }
 
 if (process.argv[1] && process.argv[1].endsWith("coverage-badge.mjs")) {
-  main();
+  main().catch((e) => {
+    console.error(e.message);
+    process.exit(1);
+  });
 }
