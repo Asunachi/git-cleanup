@@ -193,6 +193,22 @@ test("pages.yml structure: deploys the playground on main pushes and dispatch", 
   assert.match(text, /id-token: write/);
   // The site artifact it publishes is exactly what a visitor needs.
   assert.match(text, /cp index\.html _site\//);
+  // The docs site ships with the playground: pages must stage docs/*.html
+  // + docs.css, and the playground must link to it — the site and the docs
+  // cannot drift apart.
+  assert.match(text, /cp docs\/\*\.html docs\/docs\.css _site\/docs\//);
+  const indexHtml = readFileSync(join(root, "index.html"), "utf8");
+  assert.match(indexHtml, /<a href="docs\/" class="docs-link">/);
+  const docPages = ["index", "install", "usage", "config", "forges", "automation", "faq"];
+  for (const page of docPages) {
+    const html = readFileSync(join(root, "docs", `${page}.html`), "utf8");
+    assert.ok(html.includes("docs.css"), `docs/${page}.html links the shared stylesheet`);
+    assert.ok(html.includes(`<a class="home" href="./">docs</a>`), `docs/${page}.html has the docs nav`);
+  }
+  assert.ok(
+    readFileSync(join(root, "docs", "docs.css"), "utf8").includes("git-cleanup docs"),
+    "docs.css exists and is the shared sheet"
+  );
   // The npm script it runs must exist.
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.ok(pkg.scripts["sync:playground"], "package.json has the sync:playground script pages.yml runs");

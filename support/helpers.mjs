@@ -116,6 +116,192 @@ export function makeSquashRepo() {
   };
 }
 
+function baseWorkRepo(defaultBranch = "main") {
+  const base = mkdtempSync(join(tmpdir(), "git-cleanup-test-"));
+  const bare = join(base, "origin.git");
+  const work = join(base, "work");
+  sh(null, ["init", "-q", "-b", defaultBranch, "--bare", bare]);
+  sh(null, ["clone", "-q", bare, work]);
+  sh(work, ["config", "user.name", "Test"]);
+  sh(work, ["config", "user.email", "test@example.com"]);
+  return { base, bare, work };
+}
+
+/**
+ * Golden scenario: a rebase merge.
+ *
+ * main@A; feature/work commits W on top of A; main advances with B;
+ * feature/work is REBASED onto main (commits rewritten: new SHAs, tree A+B+W)
+ * and merged back with --no-ff. The pre-rebase tip is preserved on
+ * feature/work-pre-rebase (tree A+W).
+ *
+ * Expected (the golden data):
+ *   feature/work              DELETE — tip is an ancestor of the merge
+ *   feature/work-pre-rebase   WARN   — unmerged; its tree (A+W) appears
+ *                            nowhere in main's history (the rebase changed
+ *                            the base), so the conservative content guard
+ *                            correctly refuses to call it merged
+ *   main                      KEEP (head)
+ */
+export function makeRebaseRepo() {
+  const { base, bare, work } = baseWorkRepo();
+  const now = Date.now();
+  commit(work, "main", { "README.md": "root" }, { msg: "initial" });
+
+  // Branch work on top of A, 90d ago.
+  commit(work, "feature/work", { "work.txt": "1" }, { date: now - 90 * DAY, msg: "feature work" });
+  // Preserve the pre-rebase tip under its own ref.
+  sh(work, ["branch", "feature/work-pre-rebase"]);
+
+  // Main advances while the branch is out (60d ago). commit() uses
+  // `checkout -B`, which would reset main to the CURRENT head (the feature
+  // tip) — check out main first so the fixture really diverges.
+  sh(work, ["checkout", "-q", "main"]);
+  commit(work, "main", { "base.txt": "2" }, { date: now - 60 * DAY, msg: "main progress" });
+
+  // Rebase the branch onto the new main (commits rewritten, 50d ago).
+  sh(work, ["checkout", "-q", "feature/work"]);
+  sh(work, ["rebase", "-q", "main"], { env: identEnv(now - 50 * DAY) });
+  // Merge the rebased branch back in with a real merge commit (40d ago).
+  merge(work, "main", "feature/work", { date: now - 40 * DAY });
+
+  sh(work, ["checkout", "-q", "main"]);
+  sh(work, ["push", "-q", "origin", "main"]);
+  sh(work, ["remote", "set-head", "origin", "-a"]);
+  return {
+    base,
+    bare,
+    work,
+    cleanup() {
+      rmSync(base, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Golden scenario: a cherry-pick merge (the squash-merge fingerprint).
+ *
+ * main@A; feature/cherry commits X1, X2; both commits are cherry-picked
+ * onto main — the branch's tip TREE (A+X1+X2) now exists in main's history
+ * even though no commit SHA does.
+ *
+ * Expected: feature/cherry DELETE (reason squash-merged), main KEEP.
+ */
+export function makeCherryPickRepo() {
+  const { base, bare, work } = baseWorkRepo();
+  const now = Date.now();
+  commit(work, "main", { "README.md": "root" }, { msg: "initial" });
+  commit(work, "feature/cherry", { "c1.txt": "1", "c2.txt": "2" }, { date: now - 60 * DAY, msg: "cherry work" });
+  const tip = sh(work, ["rev-parse", "feature/cherry"]).out;
+  sh(work, ["checkout", "-q", "main"]);
+  // Note: no `-q` — modern git removed cherry-pick's -q short flag and
+  // rejects it with a usage error (verified on git 2.55).
+  sh(work, ["cherry-pick", tip], { env: identEnv(now - 55 * DAY) });
+  sh(work, ["push", "-q", "origin", "main"]);
+  sh(work, ["remote", "set-head", "origin", "-a"]);
+  return {
+    base,
+    bare,
+    work,
+    cleanup() {
+      rmSync(base, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Golden scenario: an octopus merge (one merge commit, many heads).
+ *
+ * main@A; f1 and f2 diverge (different files); `git merge f1 f2` creates an
+ * octopus merge commit whose parents include both branch tips — so both
+ * tips ARE ancestors of the base and plain ancestor detection must catch
+ * them (no content guard involved).
+ *
+ * Expected: feature/o1 DELETE, feature/o2 DELETE, main KEEP.
+ */
+export function makeOctopusRepo() {
+  const { base, bare, work } = baseWorkRepo();
+  const now = Date.now();
+  commit(work, "main", { "README.md": "root" }, { msg: "initial" });
+  commit(work, "feature/o1", { "o1.txt": "1" }, { date: now - 60 * DAY, msg: "octo one" });
+  commit(work, "feature/o2", { "o2.txt": "1" }, { date: now - 60 * DAY, msg: "octo two" });
+  sh(work, ["checkout", "-q", "main"]);
+  sh(work, ["merge", "-q", "--no-ff", "feature/o1", "feature/o2", "-m", "octopus merge"], {
+    env: identEnv(now - 50 * DAY),
+  });
+  sh(work, ["push", "-q", "origin", "main"]);
+  sh(work, ["remote", "set-head", "origin", "-a"]);
+  return {
+    base,
+    bare,
+    work,
+    cleanup() {
+      rmSync(base, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Golden scenario: a fast-forward merge.
+ *
+ * main@A; feature/ff commits X on top; main fast-forwards to X — the
+ * branch tip and the base tip are the SAME commit, so ancestor detection
+ * must catch it.
+ *
+ * Expected: feature/ff DELETE, main KEEP.
+ */
+export function makeFfMergeRepo() {
+  const { base, bare, work } = baseWorkRepo();
+  const now = Date.now();
+  commit(work, "main", { "README.md": "root" }, { msg: "initial" });
+  commit(work, "feature/ff", { "ff.txt": "1" }, { date: now - 60 * DAY, msg: "ff work" });
+  sh(work, ["checkout", "-q", "main"]);
+  sh(work, ["merge", "-q", "-m", "ff merge", "feature/ff"], { env: identEnv(now - 55 * DAY) });
+  sh(work, ["push", "-q", "origin", "main"]);
+  sh(work, ["remote", "set-head", "origin", "-a"]);
+  return {
+    base,
+    bare,
+    work,
+    cleanup() {
+      rmSync(base, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Golden scenario: hundreds of branches.
+ *
+ * main@A, then `n` feature branches each merged back with --no-ff (60d/50d
+ * ago) and `stale` unmerged branches (100d ago, never pushed).
+ *
+ * Expected: exactly n DELETE (reason merged) · stale WARN · main KEEP — the
+ * counts prove no phantom verdicts appear at scale.
+ */
+export function makeManyBranchesRepo(n = 200, stale = 30) {
+  const { base, bare, work } = baseWorkRepo();
+  const now = Date.now();
+  commit(work, "main", { "README.md": "root" }, { msg: "initial" });
+  for (let i = 0; i < n; i++) {
+    commit(work, `merged/branch-${i}`, { [`f${i}.txt`]: "1" }, { date: now - 60 * DAY, msg: `work ${i}` });
+    merge(work, "main", `merged/branch-${i}`, { date: now - 50 * DAY });
+  }
+  for (let i = 0; i < stale; i++) {
+    commit(work, `stale/branch-${i}`, { [`s${i}.txt`]: "1" }, { date: now - 100 * DAY, msg: `stale ${i}` });
+  }
+  sh(work, ["checkout", "-q", "main"]);
+  sh(work, ["push", "-q", "origin", "main"]);
+  sh(work, ["remote", "set-head", "origin", "-a"]);
+  return {
+    base,
+    bare,
+    work,
+    cleanup() {
+      rmSync(base, { recursive: true, force: true });
+    },
+  };
+}
+
 /**
  * Build a work repo with a bare origin and a rich set of branches:
  *
@@ -133,13 +319,7 @@ export function makeSquashRepo() {
  * Returns { base, work, cleanup }.
  */
 export function makeWorkRepo(defaultBranch = "main") {
-  const base = mkdtempSync(join(tmpdir(), "git-cleanup-test-"));
-  const bare = join(base, "origin.git");
-  const work = join(base, "work");
-  sh(null, ["init", "-q", "-b", defaultBranch, "--bare", bare]);
-  sh(null, ["clone", "-q", bare, work]);
-  sh(work, ["config", "user.name", "Test"]);
-  sh(work, ["config", "user.email", "test@example.com"]);
+  const { base, bare, work } = baseWorkRepo(defaultBranch);
 
   const now = Date.now();
   commit(work, defaultBranch, { "README.md": "root" }, { msg: "initial" });

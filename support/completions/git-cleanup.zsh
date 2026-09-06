@@ -5,8 +5,8 @@
 
 _git_cleanup() {
   local -a commands options
-  commands=(scan prune prs report-issue doctor backup completions shell-hook help)
-  options=(-y --yes --force --remote --repo --config --json --summary --check -v --verbose --no-pr --close --title --dry-run -V --version -h --help)
+  commands=(scan prune prs sweep report-issue doctor backup completions shell-hook help)
+  options=(-y --yes --force --remote --repo --config --json --summary --check -v --verbose --no-pr --close --report --report-issue --title --dry-run -V --version -h --help)
 
   if (( CURRENT == 2 )); then
     compadd -a commands

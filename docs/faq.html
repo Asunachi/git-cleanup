@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FAQ — git-cleanup docs</title>
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="docs-nav">
+    <a class="home" href="./">docs</a>
+    <span class="sep">/</span>
+    <a href="install.html">install</a>
+    <a href="usage.html">usage</a>
+    <a href="config.html">config</a>
+    <a href="forges.html">forges</a>
+    <a href="automation.html">automation</a>
+    <a href="faq.html">faq</a>
+    <span class="sep">/</span>
+    <a href="https://asunachi.github.io/git-cleanup/">playground ↗</a>
+    <a href="https://github.com/Asunachi/git-cleanup">github ↗</a>
+  </nav>
+
+  <h1>FAQ &amp; troubleshooting<span class="cursor">▊</span></h1>
+
+  <h2>Is it safe? Will it delete work?</h2>
+  <p>
+    Nothing is ever deleted automatically. <code>prune</code> always asks first
+    (grouped by risk), and only branches the analyzer can <em>prove</em> dead are
+    offered: ancestor-merged, or content-merged (the branch's final tree
+    exists in a base branch's history — the squash/rebase fingerprint).
+    Unmerged work is only ever <em>flagged</em> as stale, never deleted, unless
+    you opt in with an explicit force rule (<code>rules: [{ match, mode: "any" }]</code>)
+    — and even then it's local-only and still confirmed. Before any deletion
+    that loses unique commits, the refs are written into a git bundle;
+    <code>git-cleanup backup restore</code> (or one <code>git fetch</code>) brings them
+    back.
+  </p>
+
+  <h2>Why does <code>git branch --merged</code> miss so many branches?</h2>
+  <p>
+    Squash merges, rebase merges, and cherry-picks rewrite the commits, so the
+    branch's SHAs vanish from the base's history. Ancestry checks can't see
+    them. git-cleanup fingerprints the branch's <em>final tree</em> — if that tree
+    appears in a base's history, the branch's content is already in the base,
+    even though its commits aren't.
+  </p>
+
+  <h2>Could the content check be wrong?</h2>
+  <p>
+    It's deliberately conservative. A branch is only content-flagged when its
+    tip tree exists in a base's history <em>and</em> differs from the tree at the
+    branch's own starting point — so net-empty branches (fully reverted work,
+    no-op commits) whose tree coincidentally matches an old base tree are
+    never called merged. The golden-history test suite pins rebase, cherry-pick,
+    octopus, and fast-forward scenarios, and the seeded differential fuzz
+    compares verdicts against each branch's true fate on thousands of random
+    histories.
+  </p>
+
+  <h2>PR tracking says nothing. What do I set?</h2>
+  <pre><code>git-cleanup doctor</code></pre>
+  <p>
+    One diagnostic report: git present? <code>gh</code> present? per-forge tokens set?
+    remote detected? config loading? Each check comes with a fix hint. Missing
+    tokens never break scans — the tool degrades to pure-Git detection.
+  </p>
+
+  <h2>Why does <code>prune --remote</code> refuse to delete my version branch?</h2>
+  <p>
+    Remote deletion is a separate opt-in step, and version-shaped names
+    (<code>v1</code>, <code>5.x</code>, <code>release/*</code>…) are protected by default.
+    Maintenance branches are often merged by ancestry yet still owned
+    upstream; protect them with a two-line glob if you point the tool at a
+    shared remote.
+  </p>
+
+  <h2>My branch is squash-merged but still listed as stale</h2>
+  <p>
+    Content detection runs against the base branches the repo actually uses
+    (from the remote's HEAD — <code>main</code>, <code>master</code>, <code>develop</code>,
+    <code>dev</code>). If the work landed on a different branch, add it to the base
+    detection or check with <code>scan --verbose</code> to see the reason per branch.
+    A branch is also kept while it has an open PR or is below the age
+    threshold.
+  </p>
+
+  <h2>It says "non-interactive session: pass --yes". I did pass --yes.</h2>
+  <p>
+    If you're seeing this from a shell hook, the snippet may set a different
+    cwd or run before config is readable — run <code>git-cleanup doctor</code> and
+    the exact failing command by hand. Note <code>--force</code> is an alias for
+    <code>--yes</code>, and <code>GIT_CLEANUP_YES=1</code> works too.
+  </p>
+
+  <h2>Does it need network access?</h2>
+  <p>
+    Merge detection is fully offline — it only reads the local object
+    database. Network is used only for PR enrichment and
+    <code>report-issue</code>, and only when a forge remote and token are available.
+  </p>
+
+  <h2>Can I use it in CI?</h2>
+  <p>
+    Yes — <code>scan --check</code> as a gate, <code>sweep --yes --json</code> in cron,
+    and the <code>scan-report</code> GitHub Action for scheduled reports. The repo
+    also ships a structurally-mirrored GitLab CI template. See
+    <a href="automation.html">Automation</a>.
+  </p>
+
+  <footer><a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a> · MIT</footer>
+</div>
+</body>
+</html>

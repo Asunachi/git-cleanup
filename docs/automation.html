@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Automation — git-cleanup docs</title>
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="docs-nav">
+    <a class="home" href="./">docs</a>
+    <span class="sep">/</span>
+    <a href="install.html">install</a>
+    <a href="usage.html">usage</a>
+    <a href="config.html">config</a>
+    <a href="forges.html">forges</a>
+    <a href="automation.html">automation</a>
+    <a href="faq.html">faq</a>
+    <span class="sep">/</span>
+    <a href="https://asunachi.github.io/git-cleanup/">playground ↗</a>
+    <a href="https://github.com/Asunachi/git-cleanup">github ↗</a>
+  </nav>
+
+  <h1>Automation<span class="cursor">▊</span></h1>
+
+  <h2>Exit codes</h2>
+  <table>
+    <tr><th>Code</th><th>Meaning</th></tr>
+    <tr><td>0</td><td>ok</td></tr>
+    <tr><td>1</td><td>error (bad config, non-git repo, failed deletion)</td></tr>
+    <tr><td>2</td><td><code>scan --check</code>: cleanup needed</td></tr>
+  </table>
+
+  <h2>JSON output</h2>
+  <p>
+    <code>scan --json</code> emits one document: <code>{ tool, generatedAt, config,
+    repos: [...] }</code> where each repo carries <code>path</code>, <code>baseRefs</code>,
+    <code>headBranch</code>, <code>remotes</code>, <code>pr</code> state, and every branch with
+    <code>name</code>, <code>type</code>, <code>ageDays</code>, <code>merged</code>,
+    <code>contentMerged</code>, <code>pr</code>, <code>verdict</code>, <code>reason</code>. Every
+    repo is present in input order — errors are <code>{ path, error }</code> entries,
+    never missing rows, so consumers never handle empty or concatenated
+    output. <code>prs --json</code> follows the same one-document rule.
+  </p>
+  <p>
+    <code>sweep --json</code> adds run-level fields: <code>dryRun</code>, <code>mode</code>,
+    <code>report</code>, <code>issue</code>, and per-repo <code>prunableBranches</code>,
+    <code>staleBranches</code>, <code>deletedLocal</code>, <code>deletedRemote</code>,
+    <code>prunedRemote</code>, <code>backups</code>, <code>errors</code>. In JSON mode the
+    prune progress block moves to stderr, so stdout is exactly one document.
+  </p>
+
+  <h2>CI gate</h2>
+  <pre><code>git-cleanup scan --check --json &amp;&amp; echo "workspace is clean"   # exit 2 = cleanup needed</code></pre>
+
+  <h2>Nightly sweep (cron)</h2>
+  <pre><code># ~/.config/git-cleanup/config.json
+{
+  "sweep": { "mode": "prune", "reportIssue": true },
+  "repos": ["~/work/a", "~/work/b"]
+}
+
+# crontab — --yes is required non-interactively; a missing --yes fails loudly
+0 4 * * *  git-cleanup sweep --yes</code></pre>
+  <p>
+    With <code>sweep.reportIssue</code> (or <code>--report-issue &lt;title&gt;</code>) the
+    combined markdown report is posted to the <strong>first repo with a
+    recognized forge remote</strong> — one living issue per workspace, updated
+    in place, not one per run. A configured post with nowhere to post is a
+    loud error, never a silent skip. <code>--dry-run</code> rehearses the whole
+    sweep read-only.
+  </p>
+
+  <h2>Scheduled GitHub Action</h2>
+  <pre><code># .github/workflows/scan.yml
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+permissions:
+  contents: read
+  issues: write
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.3.0
+        with:
+          path: .
+          report: issue
+          issue-title: "git-cleanup: branch report"</code></pre>
+  <p>
+    A shallow checkout (the Actions default) hides the history merge
+    detection needs, so the action fetches full history first. The repo ships
+    the same flow for GitLab as a CI template (<code>.gitlab-ci.yml</code>) that
+    structurally mirrors the GitHub matrix and can't drift from it.
+  </p>
+
+  <h2>Keeping a report issue current on any forge</h2>
+  <pre><code>git-cleanup report-issue report.md --dry-run    # rehearsal: search, no write
+git-cleanup report-issue report.md              # create or update in place</code></pre>
+  <p>
+    The search dedups by exact title (paginated), so the single report issue
+    survives repos with thousands of newer open issues.
+  </p>
+
+  <footer><a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a> · MIT</footer>
+</div>
+</body>
+</html>

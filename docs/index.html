@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>git-cleanup docs — branch &amp; stale-PR automator</title>
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="docs-nav">
+    <a class="home" href="./">docs</a>
+    <span class="sep">/</span>
+    <a href="install.html">install</a>
+    <a href="usage.html">usage</a>
+    <a href="config.html">config</a>
+    <a href="forges.html">forges</a>
+    <a href="automation.html">automation</a>
+    <a href="faq.html">faq</a>
+    <span class="sep">/</span>
+    <a href="https://asunachi.github.io/git-cleanup/">playground ↗</a>
+    <a href="https://github.com/Asunachi/git-cleanup">github ↗</a>
+  </nav>
+
+  <h1>git-cleanup<span class="cursor">▊</span> docs</h1>
+  <p class="sub">
+    A zero-dependency CLI that scans local &amp; remote Git branches,
+    cross-references them with pull-request state, and safely prunes what is
+    genuinely dead. These pages are the reference; the README has the full
+    narrative, and the <a href="https://asunachi.github.io/git-cleanup/">playground</a>
+    runs the real decision engine in your browser.
+  </p>
+
+  <div class="panel">
+    <h2 style="margin-top:0;border-top:none;padding-top:0">Quick start</h2>
+    <pre><code>npm install -g @maliqkara/gitcleanup
+cd ~/your/repo &amp;&amp; git-cleanup scan     # what's dead?
+git-cleanup prune                    # deletes nothing without asking
+git-cleanup sweep                    # every configured repo in one pass</code></pre>
+  </div>
+
+  <h2>Pages</h2>
+  <table>
+    <tr><th>Page</th><th>What it covers</th></tr>
+    <tr><td><a href="install.html">Install</a></td><td>npm, Homebrew, npx, from source; requirements</td></tr>
+    <tr><td><a href="usage.html">Usage</a></td><td>Every command: <code>scan</code>, <code>prune</code>, <code>prs</code>, <code>sweep</code>, <code>report-issue</code>, <code>doctor</code>, <code>backup</code>, completions, hooks</td></tr>
+    <tr><td><a href="config.html">Configuration</a></td><td>The full schema: thresholds, rules, protected globs, remote/backup/sweep sections, layered config files</td></tr>
+    <tr><td><a href="forges.html">Forge support</a></td><td>GitHub, GitLab, Gitea/Codeberg, Bitbucket Cloud &amp; Server: tokens, API bases, self-hosted host claims</td></tr>
+    <tr><td><a href="automation.html">Automation</a></td><td>JSON output shapes, exit codes, sweep in cron, CI gates, the GitHub Action</td></tr>
+    <tr><td><a href="faq.html">FAQ &amp; troubleshooting</a></td><td>Safety model, squash-merge detection, <code>doctor</code>, common errors</td></tr>
+  </table>
+
+  <h2>Why it exists</h2>
+  <p>
+    <code>git branch --merged</code> only catches branches whose commits are
+    literal ancestors of your base. Squash merges, rebase merges, and
+    cherry-picks rewrite the commits — so those dead branches look unmerged
+    forever and accumulate. git-cleanup additionally fingerprints each
+    branch's <em>final tree</em> against the base's history, which catches
+    them, and is deliberately conservative: protected and checked-out
+    branches are never touched, unmerged work is never deleted without an
+    explicit force rule, and every deletion that loses unique commits writes
+    a recoverable git bundle first.
+  </p>
+
+  <footer>
+    <a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a>
+    · MIT licensed
+  </footer>
+</div>
+</body>
+</html>

@@ -54,6 +54,24 @@ export function defaults() {
       // (0 = keep backups forever)
       retainDays: 0,
     },
+    sweep: {
+      // `git-cleanup sweep`: one pass over every configured repo.
+      // mode "report" never deletes — the default, so a sweep with no
+      // config is safe by construction. "prune" deletes through the same
+      // confirmed() gate as `git-cleanup prune` (--yes required in
+      // non-interactive sessions, safety bundles before any -D or push).
+      // Per-repo override: a `repos` entry may be an object with a mode.
+      mode: "report",
+      // prune --remote inside sweep (remote deletions are pushes)
+      remote: false,
+      // Write a combined markdown report to this file. Relative to the
+      // config file's directory (like `repos` entries). null = don't.
+      reportFile: null,
+      // Post the report as a forge issue on the first repo that has a
+      // recognized forge remote: true = default title, or { "title": "…" }.
+      // null = don't post.
+      reportIssue: null,
+    },
     forge: {
       // Claim hostnames for self-hosted forges that the built-in hostname
       // heuristics cannot recognize: { "git.example.com": "gitlab",

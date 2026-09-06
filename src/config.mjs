@@ -149,6 +149,35 @@ export function normalizeConfig(raw) {
     }
     out.forge = norm;
   }
+  if (raw.sweep && typeof raw.sweep === "object") {
+    const s = raw.sweep;
+    const norm = {};
+    if (s.mode !== undefined) {
+      if (s.mode !== "report" && s.mode !== "prune") {
+        throw new ConfigError(`config key "sweep.mode" must be "report" or "prune"`);
+      }
+      norm.mode = s.mode;
+    }
+    if (s.remote !== undefined) norm.remote = checkBool(s.remote, "sweep.remote");
+    if (s.reportFile !== undefined && s.reportFile !== null) {
+      norm.reportFile = String(s.reportFile);
+    }
+    if (s.reportIssue !== undefined && s.reportIssue !== null) {
+      if (s.reportIssue === true) norm.reportIssue = {};
+      else if (
+        typeof s.reportIssue === "object" &&
+        !Array.isArray(s.reportIssue) &&
+        typeof s.reportIssue.title === "string"
+      ) {
+        norm.reportIssue = { title: s.reportIssue.title };
+      } else {
+        throw new ConfigError(
+          `config key "sweep.reportIssue" must be true or { "title": "..." }`
+        );
+      }
+    }
+    out.sweep = norm;
+  }
   if (Array.isArray(raw.protected)) out.protected = [...raw.protected];
   if (Array.isArray(raw.rules)) {
     out.rules = raw.rules.map((rule, i) => {
@@ -166,7 +195,21 @@ export function normalizeConfig(raw) {
       return norm;
     });
   }
-  if (Array.isArray(raw.repos)) out.repos = [...raw.repos];
+  if (Array.isArray(raw.repos)) {
+    out.repos = raw.repos.map((p, i) => {
+      if (typeof p === "string") return p;
+      if (p && typeof p === "object" && !Array.isArray(p) && typeof p.path === "string") {
+        if (p.mode === undefined) return { path: p.path };
+        if (p.mode !== "report" && p.mode !== "prune") {
+          throw new ConfigError(`repos[${i}].mode must be "report" or "prune"`);
+        }
+        return { path: p.path, mode: p.mode };
+      }
+      throw new ConfigError(
+        `repos[${i}] must be a path string or { "path": "...", "mode": "report"|"prune" }`
+      );
+    });
+  }
   return out;
 }
 
@@ -219,14 +262,21 @@ export function loadConfig({ configFile, repoFlags = [], cwd, homeFile = HOME_CO
   if (explicitJson?.repos?.length) configDir = dirname(resolve(configFile));
   else if (foundJson?.repos?.length) configDir = dirname(found);
 
-  let repos;
+  // repoSpecs carries the per-repo sweep policy ({ path, mode? }) alongside
+  // the resolved paths; `repos` stays a plain path list for existing callers.
+  let repoSpecs;
   if (repoFlags.length > 0) {
-    repos = repoFlags.map((p) => resolve(cwd, p));
+    repoSpecs = repoFlags.map((p) => ({ path: resolve(cwd, p) }));
   } else {
-    repos = (cfg.repos ?? []).map((p) => resolve(configDir, p));
-    if (repos.length === 0) repos = [cwd];
+    repoSpecs = (cfg.repos ?? []).map((p) =>
+      typeof p === "string"
+        ? { path: resolve(configDir, p) }
+        : { path: resolve(configDir, p.path), mode: p.mode }
+    );
+    if (repoSpecs.length === 0) repoSpecs = [{ path: cwd }];
   }
+  const repos = repoSpecs.map((s) => s.path);
 
-  return { cfg, repos, configDir, sources };
+  return { cfg, repos, repoSpecs, configDir, sources };
 }
 

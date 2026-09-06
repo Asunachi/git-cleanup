@@ -1,0 +1,96 @@
+/* git-cleanup docs — plain CSS, no frameworks, served as-is from /docs/.
+   Mirrors the playground's dark theme (index.html) so the site feels like
+   one product. */
+
+:root {
+  --bg0: #0a0e14;
+  --bg1: #0d1117;
+  --panel: rgba(22, 27, 34, .82);
+  --panel2: #161d28;
+  --border: #2d333b;
+  --text: #e6edf3;
+  --dim: #8b949e;
+  --green: #3fb950;
+  --red: #f85149;
+  --amber: #d29922;
+  --cyan: #39c5cf;
+  --violet: #a371f7;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(57,197,207,.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 20%, rgba(163,113,247,.06), transparent 55%),
+    linear-gradient(180deg, var(--bg0), var(--bg1) 40%);
+  background-attachment: fixed;
+}
+
+.wrap { max-width: 860px; margin: 0 auto; padding: 30px 24px 100px; }
+
+nav.docs-nav {
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 16px; margin-bottom: 30px;
+  background: var(--panel); font: 12.5px var(--mono);
+}
+nav.docs-nav a { color: var(--dim); text-decoration: none; }
+nav.docs-nav a:hover { color: var(--cyan); }
+nav.docs-nav a.home { color: var(--cyan); font-weight: 700; }
+nav.docs-nav .sep { color: var(--border); }
+
+h1 {
+  margin: 0 0 6px;
+  font: 800 34px/1.15 var(--mono);
+  letter-spacing: -1px;
+  background: linear-gradient(100deg, #e6edf3 10%, #39c5cf 45%, #3fb950 80%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+h1 .cursor { color: var(--green); -webkit-text-fill-color: var(--green); }
+p.sub { color: var(--dim); margin: 8px 0 26px; max-width: 68ch; }
+
+h2 {
+  font: 700 20px var(--mono); margin: 44px 0 12px;
+  padding-top: 14px; border-top: 1px solid var(--border);
+}
+h3 { font: 700 15px var(--mono); margin: 28px 0 8px; color: var(--cyan); }
+
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  font: 13px var(--mono);
+  background: rgba(57,197,207,.08);
+  border: 1px solid rgba(57,197,207,.2);
+  border-radius: 5px; padding: 1px 6px; color: #9be9ef;
+}
+pre {
+  background: #0a0e14; border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; overflow-x: auto; font: 12.5px/1.6 var(--mono);
+  color: #c9d1d9; margin: 12px 0;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; }
+
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 14px 0; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--dim); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .06em; }
+tr:hover td { background: rgba(22,27,34,.5); }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px 22px; margin: 16px 0;
+}
+.panel.warn { border-color: rgba(210,153,34,.5); }
+.panel.ok { border-color: rgba(63,185,80,.45); }
+
+ul, ol { padding-left: 22px; }
+li { margin: 5px 0; }
+
+footer { margin-top: 60px; color: var(--dim); font-size: 13px; text-align: center; }

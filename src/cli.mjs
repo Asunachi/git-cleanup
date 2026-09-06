@@ -17,6 +17,7 @@ import { repoMeta } from "./git.mjs";
 import { postReport, DEFAULT_TITLE } from "./report-issue.mjs";
 import { printDoctor, runDoctor } from "./doctor.mjs";
 import { listBackupFiles, printBackupList, restoreBackup } from "./backup.mjs";
+import { runSweep, printSweep } from "./sweep.mjs";
 import { c, plural } from "./util.mjs";
 import { VERDICTS } from "./classify.mjs";
 
@@ -31,6 +32,7 @@ Commands:
   scan            report branches that can be cleaned up (default)
   prune           delete merged/stale branches (always asks first)
   prs             list stale open pull requests (--close to close them)
+  sweep           walk every configured repo; prune by policy; one report
   report-issue    keep one issue with a fixed title current on any forge
   doctor          diagnose the environment (git, gh, tokens, config, remotes)
   backup          list backup bundles, or restore branches from one
@@ -42,6 +44,7 @@ Usage:
   git-cleanup [scan] [options]
   git-cleanup prune [options]
   git-cleanup prs [--close] [options]
+  git-cleanup sweep [--report <file.md>] [--report-issue <title>] [--dry-run]
   git-cleanup report-issue <report.md> [--title <title>] [--dry-run]
   git-cleanup doctor [--json] [options]
   git-cleanup backup list [--json] [options]
@@ -62,8 +65,10 @@ Options:
   -v, --verbose        show every branch, including kept ones
       --no-pr          do not query GitHub/GitLab/Bitbucket for PR state
       --close          (prs only) close stale open PRs after confirmation
+      --report <file>  (sweep only) write a combined markdown report here
+      --report-issue <title>  (sweep only) post the report as a forge issue
       --title <t>      (report-issue only) exact issue title to keep current
-      --dry-run        (report-issue only) rehearsal: search, no write
+      --dry-run        (report-issue/sweep) rehearsal: search, no writes
   -V, --version        print the version
   -h, --help           show this help
 
@@ -72,6 +77,9 @@ Examples:
   git-cleanup scan --check --json && echo "workspace is clean"   # CI gate
   git-cleanup prune --remote --yes                               # nightly cron
   git-cleanup prs --close                                        # stale-PR automator
+  git-cleanup sweep --json                                       # whole workspace, machine-readable
+  git-cleanup sweep --yes                                        # prune per config (sweep.mode)
+  git-cleanup sweep --report-issue "Cleanup" --dry-run          # rehearse the issue post
   git-cleanup scan --json --repo . | node .github/actions/scan-report/report.mjs
   git-cleanup report-issue report.md --dry-run                   # rehearsal
   git-cleanup report-issue report.md                             # post (any forge)
@@ -253,6 +261,26 @@ async function cmdBackup(opts, sub, file) {
   }
 }
 
+/** One pass over every configured repo: scan, prune by policy, report. */
+async function cmdSweep(loaded, opts) {
+  const { cfg, repoSpecs, configDir } = loaded;
+  // An explicit --report-issue always wins over config (and enables posting
+  // even when the config said nothing).
+  if (opts.reportIssueTitle) cfg.sweep.reportIssue = { title: opts.reportIssueTitle };
+  try {
+    const result = await runSweep({ repoSpecs, cfg, opts, configDir });
+    if (opts.json) {
+      console.log(JSON.stringify(result.json, null, 2));
+    } else {
+      console.log(printSweep(result));
+    }
+    return result.hadError ? 1 : 0;
+  } catch (e) {
+    console.error(c.red(`error: ${e.message}`));
+    return 1;
+  }
+}
+
 /** Print shell completions for `shell` (bash | zsh | fish). */
 function cmdCompletions(shell) {
   if (!SHELLS.includes(shell)) {
@@ -287,6 +315,8 @@ function parseArgs(argv) {
     close: false,
     title: null,
     dryRun: false,
+    reportFile: null,
+    reportIssueTitle: null,
   };
   let command = "scan";
   let shell = null;
@@ -312,6 +342,7 @@ function parseArgs(argv) {
       case "scan":
       case "prune":
       case "prs":
+      case "sweep":
       case "report-issue":
       case "doctor":
       case "backup":
@@ -349,6 +380,12 @@ function parseArgs(argv) {
         break;
       case "--title":
         opts.title = takeValue("--title");
+        break;
+      case "--report":
+        opts.reportFile = takeValue("--report");
+        break;
+      case "--report-issue":
+        opts.reportIssueTitle = takeValue("--report-issue");
         break;
       case "--dry-run":
         opts.dryRun = true;
@@ -682,6 +719,11 @@ export async function main(argv = process.argv.slice(2)) {
     return 1;
   }
   const { cfg, repos } = loaded;
+
+  if (command === "sweep") {
+    return await cmdSweep(loaded, opts);
+  }
+
   if (!opts.pr) cfg.pr.track = false;
 
   let results;

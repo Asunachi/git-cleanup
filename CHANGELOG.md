@@ -4,6 +4,48 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `git-cleanup sweep`: one pass over every configured repo — scan, prune
+  by policy (`sweep.mode: "report"` never deletes — the default; `"prune"`
+  goes through the same confirmation gate as `prune`), one combined
+  markdown report (`--report` / `sweep.reportFile`), and an optional forge
+  issue post (`--report-issue` / `sweep.reportIssue`). `--json` emits a
+  single machine-readable document for the whole run (prune's human block
+  moves to stderr so stdout stays pure JSON); `--dry-run` scans and
+  searches read-only. `repos` entries may be `{ "path", "mode" }` objects
+  for a per-repo sweep mode. A configured issue post with no forge remote
+  is a loud error, never a silent skip.
+- Golden-history merge-detection fixtures (`test/golden.test.mjs`): real
+  repositories built for each integration shape — rebase onto a moved
+  base, cherry-pick, octopus merge, fast-forward merge, and 230 branches
+  at once — with a pinned verdict table per scenario. The seeded fuzz
+  finds *a* bug; these prove the user's actual history shapes are judged
+  correctly (including the conservative guard that must NOT flag
+  pre-rebase work as merged).
+- The release workflow now publishes to npm itself with **Sigstore
+  provenance** (`npm publish --provenance` with `id-token: write`, from
+  the release tag on Node 26): the registry artifact is cryptographically
+  bound to this repo, this workflow, and the exact release commit — a
+  local publish can never carry provenance. The tap PR waits for the
+  publish to succeed, so a version that never reached the registry can't
+  get a formula. Requires the `NPM_TOKEN` repository secret (publish-only
+  automation token); without it the publish job fails loudly and nothing
+  ships.
+- A multi-page **docs site** (`docs/`, plain hand-written HTML, served
+  from the Pages deploy at `/docs/`): install, usage, the full config
+  schema, per-forge setup, automation, and an FAQ — with a parity test
+  pinning the deploy step and the playground's docs link.
+- Two companion repositories: **`gh-git-cleanup`** — a GitHub CLI
+  extension (`gh extension install Asunachi/gh-git-cleanup` → `gh
+  git-cleanup`), which runs a real install, falls back to `npx`, and hands
+  the tool gh's own auth token — and **`git-cleanup-action`** — a
+  stable-name wrapper around the `scan-report` action, self-tested on
+  itself weekly and auto-re-pinned to each release by a drift-check
+  workflow.
+
 ## [0.3.0] - 2026-09-06
 
 ### Security

@@ -75,11 +75,16 @@ jobs:
       - name: Stage the site
         shell: bash
         run: |
-          mkdir -p _site
+          mkdir -p _site/docs
           cp index.html _site/
           cp demo.svg _site/
           cp coverage.json _site/
           cp coverage-raw.json _site/
+          # The docs pages are plain hand-written HTML + one shared CSS sheet
+          # (no build step — the zero-dependency philosophy applies to the
+          # site too). Only *.html and the css ship; the .md files in docs/
+          # (launch-post, marketplace) stay out of the published site.
+          cp docs/*.html docs/docs.css _site/docs/
 
       - uses: actions/upload-pages-artifact@v3
         with:

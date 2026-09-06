@@ -315,6 +315,68 @@ test("backup config: enabled by default, normalizes, can be disabled", () => {
   assert.throws(() => normalizeConfig({ backup: { retainDays: -1 } }));
 });
 
+test("sweep config: defaults, normalization, validation", () => {
+  const d = defaults();
+  assert.deepEqual(d.sweep, {
+    mode: "report",
+    remote: false,
+    reportFile: null,
+    reportIssue: null,
+  });
+  assert.equal(normalizeConfig({ sweep: { mode: "prune" } }).sweep.mode, "prune");
+  assert.equal(normalizeConfig({ sweep: { remote: true } }).sweep.remote, true);
+  assert.equal(
+    normalizeConfig({ sweep: { reportFile: "r.md" } }).sweep.reportFile,
+    "r.md"
+  );
+  assert.deepEqual(normalizeConfig({ sweep: { reportIssue: true } }).sweep.reportIssue, {});
+  assert.deepEqual(
+    normalizeConfig({ sweep: { reportIssue: { title: "T" } } }).sweep.reportIssue,
+    { title: "T" }
+  );
+  assert.throws(() => normalizeConfig({ sweep: { mode: "delete" } }), /\"report\" or \"prune\"/);
+  assert.throws(() => normalizeConfig({ sweep: { remote: "yes" } }), /true or false/);
+  assert.throws(() => normalizeConfig({ sweep: { reportIssue: "T" } }), /must be true or/);
+});
+
+test("repos entries may carry a per-repo sweep mode", () => {
+  assert.deepEqual(
+    normalizeConfig({ repos: ["a", { path: "b", mode: "prune" }] }).repos,
+    ["a", { path: "b", mode: "prune" }]
+  );
+  assert.deepEqual(normalizeConfig({ repos: [{ path: "b" }] }).repos, [{ path: "b" }]);
+  assert.throws(
+    () => normalizeConfig({ repos: [{ mode: "prune" }] }),
+    /must be a path string or/ // missing path
+  );
+  assert.throws(
+    () => normalizeConfig({ repos: [{ path: "b", mode: "sometimes" }] }),
+    /repos\[0\]\.mode/
+  );
+  assert.throws(() => normalizeConfig({ repos: [42] }), /must be a path string or/);
+});
+
+test("loadConfig resolves object-form repos and exposes repoSpecs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "gc-cfg-"));
+  try {
+    writeFileSync(
+      join(dir, ".gitcleanup.json"),
+      JSON.stringify({ repos: [{ path: "sub", mode: "prune" }, "other"] })
+    );
+    const l = loadConfig({ cwd: dir, homeFile: join(dir, "no-home.json") });
+    assert.deepEqual(l.repos, [join(dir, "sub"), join(dir, "other")]);
+    assert.deepEqual(l.repoSpecs, [
+      { path: join(dir, "sub"), mode: "prune" },
+      { path: join(dir, "other") },
+    ]);
+    // --repo flags still override config repos and carry no mode.
+    const l2 = loadConfig({ cwd: dir, repoFlags: ["x"], homeFile: join(dir, "no-home.json") });
+    assert.deepEqual(l2.repoSpecs, [{ path: join(dir, "x") }]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("forge.hosts config: normalized, defaults empty, unknown forges rejected", () => {
   assert.deepEqual(defaults().forge.hosts, {});
   assert.deepEqual(

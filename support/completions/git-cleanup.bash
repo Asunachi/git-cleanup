@@ -6,8 +6,8 @@ _git_cleanup() {
   local cur prev
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  local commands="scan prune prs report-issue doctor backup completions shell-hook help"
-  local options="-y --yes --force --remote --repo --config --json --summary --check -v --verbose --no-pr --close --title --dry-run -V --version -h --help"
+  local commands="scan prune prs sweep report-issue doctor backup completions shell-hook help"
+  local options="-y --yes --force --remote --repo --config --json --summary --check -v --verbose --no-pr --close --report --report-issue --title --dry-run -V --version -h --help"
 
   case "$prev" in
     --repo|--config)

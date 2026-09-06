@@ -53,6 +53,12 @@
   }
   .badges b { color: var(--text); font-weight: 600; }
   .badges .hot { border-color: rgba(57,197,207,.5); color: var(--cyan); }
+  .badges a.docs-link {
+    padding: 3px 12px; border: 1px solid rgba(163,113,247,.5); border-radius: 999px;
+    background: rgba(163,113,247,.08); font: 12px var(--mono); color: var(--violet);
+    text-decoration: none; transition: border-color .15s, color .15s;
+  }
+  .badges a.docs-link:hover { border-color: var(--violet); color: var(--text); }
 
   h2 {
     font: 700 20px var(--mono); margin: 44px 0 12px;
@@ -198,10 +204,11 @@
       <span><b>Node ≥ 18</b> · zero npm deps</span>
       <span>git only — never touches <b>.git</b> internals</span>
       <span>GitHub <b>+ GitLab</b> PR enrichment</span>
-      <span><b>207</b> tests · CI on <b>Linux / macOS / Windows</b></span>
+      <span><b>229</b> tests · CI on <b>Linux / macOS / Windows</b></span>
       <span id="cov-badge" style="display:none" title="live coverage of src/, measured by the pages deploy using Node's built-in test coverage">coverage: <b>…</b></span>
       <span class="hot">squash/rebase-aware detection</span>
       <span class="hot">recoverable deletions (git bundles)</span>
+      <a href="docs/" class="docs-link">📖 docs</a>
     </div>
   </header>
 
@@ -366,7 +373,7 @@
 <pre><span class="cmd">$ npm i -g @maliqkara/gitcleanup</span>   <span class="ghost"># adds `git-cleanup` to PATH</span>
 <span class="cmd">$ cd ~/your/repo && git-cleanup scan</span>
 <span class="cmd">$ git-cleanup prune</span>            <span class="ghost"># asks before deleting anything</span>
-<span class="cmd">$ npm test</span>                     <span class="ghost"># 207 unit + integration tests</span></pre>
+<span class="cmd">$ npm test</span>                     <span class="ghost"># 229 unit + integration tests</span></pre>
   </div>
 
   <footer>

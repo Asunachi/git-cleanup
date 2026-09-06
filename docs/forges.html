@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Forge support — git-cleanup docs</title>
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="docs-nav">
+    <a class="home" href="./">docs</a>
+    <span class="sep">/</span>
+    <a href="install.html">install</a>
+    <a href="usage.html">usage</a>
+    <a href="config.html">config</a>
+    <a href="forges.html">forges</a>
+    <a href="automation.html">automation</a>
+    <a href="faq.html">faq</a>
+    <span class="sep">/</span>
+    <a href="https://asunachi.github.io/git-cleanup/">playground ↗</a>
+    <a href="https://github.com/Asunachi/git-cleanup">github ↗</a>
+  </nav>
+
+  <h1>Forge support<span class="cursor">▊</span></h1>
+  <p class="sub">
+    Every forge behind one contract: PR enrichment (open/closed/merged state
+    per branch) and <code>report-issue</code> (find/create/update one issue with a
+    fixed title). Merge detection itself is fully offline — forge state is a
+    best-effort enrichment on top.
+  </p>
+
+  <h2>Provider matrix</h2>
+  <table>
+    <tr><th>Forge</th><th>Detected remote</th><th>PR backend</th><th>report-issue</th></tr>
+    <tr><td>GitHub</td><td><code>github.com</code></td><td><code>gh</code> CLI, else REST + <code>GITHUB_TOKEN</code></td><td>✅</td></tr>
+    <tr><td>GitLab</td><td><code>gitlab.com</code>, <code>*.gitlab.*</code> self-hosted</td><td>REST + <code>GITLAB_TOKEN</code> (or <code>CI_JOB_TOKEN</code> in GitLab CI)</td><td>✅</td></tr>
+    <tr><td>Gitea / Codeberg / Forgejo</td><td><code>gitea.com</code>, <code>codeberg.org</code>, <code>forgejo.org</code></td><td>REST + <code>GITEA_TOKEN</code> (GitHub-compatible API)</td><td>✅</td></tr>
+    <tr><td>Bitbucket Cloud</td><td><code>bitbucket.org</code></td><td>REST + <code>BITBUCKET_TOKEN</code></td><td>✅</td></tr>
+    <tr><td>Bitbucket Server / Data Center</td><td>host containing <code>bitbucket</code>, not <code>bitbucket.org</code></td><td>REST (<code>/rest/api/</code> dialect) + <code>BITBUCKET_TOKEN</code></td><td>❌ (issues live in Jira — loud error, never silent)</td></tr>
+  </table>
+
+  <h2>Self-hosted instances</h2>
+  <p>
+    GitLab self-hosted domains (<code>*.gitlab.*</code>) and Bitbucket Server hosts
+    are recognized by hostname. For anything else — a Gitea at
+    <code>git.internal</code>, a custom GitLab domain — claim the host explicitly;
+    an explicit mapping always wins:
+  </p>
+  <pre><code>// .gitcleanup.json or ~/.config/git-cleanup/config.json
+{
+  "forge": {
+    "hosts": {
+      "git.example.com": "gitlab",
+      "git.internal": "gitea",
+      "stash.internal": "bitbucket-server"
+    }
+  }
+}</code></pre>
+  <p>
+    Override API bases per forge when the instance lives behind a proxy or
+    custom path: <code>GITLAB_API_BASE</code>, <code>BITBUCKET_API_BASE</code>,
+    <code>GITEA_API_BASE</code>, <code>GITHUB_API_BASE</code>.
+  </p>
+
+  <h2>Tokens</h2>
+  <ul>
+    <li><strong>GitHub</strong>: the <code>gh</code> CLI is used when present (no token needed);
+      otherwise set <code>GITHUB_TOKEN</code>.</li>
+    <li><strong>GitLab</strong>: <code>GITLAB_TOKEN</code> with <code>api</code> scope; inside
+      GitLab CI, <code>CI_JOB_TOKEN</code> is used as a fallback so the scheduled
+      report job needs no extra secret.</li>
+    <li><strong>Gitea/Codeberg</strong>: <code>GITEA_TOKEN</code>.</li>
+    <li><strong>Bitbucket Cloud &amp; Server</strong>: <code>BITBUCKET_TOKEN</code> — one token
+      covers both.</li>
+  </ul>
+  <p>
+    Missing tokens never break scans: PR enrichment degrades to pure-Git
+    detection, and <code>git-cleanup doctor</code> tells you exactly what to set.
+  </p>
+
+  <h2>Adding a forge</h2>
+  <p>
+    A provider implements one contract (see <code>src/forge.mjs</code>): PR
+    shape <code>{ number, title, url, headRef, isDraft, state, updatedAt, mergedAt,
+    ageDays }</code> plus an optional <code>issues</code> capability. All consumers
+    (analyze, classify, report, CLI, the GitHub Action) read only that shape,
+    so a new forge is one provider module + one registration line.
+  </p>
+
+  <footer><a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a> · MIT</footer>
+</div>
+</body>
+</html>

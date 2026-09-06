@@ -79,16 +79,20 @@ function backupBranches(repo, cfg, branches, tag) {
   return { file };
 }
 
-function printBackupNote(file, tag) {
-  console.log(c.dim(`  💾 backed up → ${file}`));
+function printBackupNote(file, tag, silent) {
+  // Safety-critical feedback: when the caller runs JSON mode (silent), the
+  // note goes to stderr so stdout stays one pure JSON document — the bundle
+  // path also lands in the summary's `backups` field for machine consumers.
+  const out = silent ? console.error : console.log;
+  out(c.dim(`  💾 backed up → ${file}`));
   if (tag === "remote") {
-    console.log(
+    out(
       c.dim(
         `     restore: git fetch <bundle> "+refs/remotes/*:refs/remotes/*"  (then git push origin to restore on the server)`
       )
     );
   } else {
-    console.log(
+    out(
       c.dim(`     restore: git fetch <bundle> "+refs/heads/*:refs/heads/*"  (from inside the repo)`)
     );
   }
@@ -219,10 +223,15 @@ function deleteRemoteBranches(repo, branches) {
 
 /**
  * Prune one analyzed repo.
- * opts: { yes, remote }
+ * opts: { yes, remote, silent } — silent suppresses human output so JSON
+ * callers (sweep --json) keep stdout pure; backup notes move to stderr.
  * Returns a summary object; throws only on config/session problems.
  */
 export async function pruneRepo(repo, cfg, opts = {}) {
+  const silent = Boolean(opts.silent);
+  const say = (...a) => {
+    if (!silent) console.log(...a);
+  };
   const candidates = repo.branches.filter(
     (b) => b.verdict === VERDICTS.DELETE
   );
@@ -236,9 +245,9 @@ export async function pruneRepo(repo, cfg, opts = {}) {
     return { nothing: true, repo, deletedBackups: [] };
   }
 
-  console.log(c.bold(`\n📦 ${repo.path}`));
+  say(c.bold(`\n📦 ${repo.path}`));
   if (removedBackups.length > 0) {
-    console.log(
+    say(
       c.dim(
         `  🧹 removed ${plural(
           removedBackups.length,
@@ -254,10 +263,10 @@ export async function pruneRepo(repo, cfg, opts = {}) {
       : b.contentMerged
         ? ", content merged (squash/rebase)"
         : ", NOT merged";
-    console.log(`  ${c.red("•")} ${c.red(b.name)}  ${c.dim(`${b.ageDays}d old${state}`)}${note}`);
+    say(`  ${c.red("•")} ${c.red(b.name)}  ${c.dim(`${b.ageDays}d old${state}`)}${note}`);
   }
   if (!opts.remote && remote.length > 0) {
-    console.log(
+    say(
       c.dim(
         `\n  ${plural(remote.length, "remote branch")} eligible — rerun with --remote to delete them.`
       )
@@ -289,10 +298,10 @@ export async function pruneRepo(repo, cfg, opts = {}) {
       summary.errors.push(...res.errors);
       for (const bk of res.backedUp) {
         summary.backups.push(bk);
-        printBackupNote(bk.file, "local");
+        printBackupNote(bk.file, "local", silent);
       }
       if (res.backedUp.length > 0) {
-        console.log(
+        say(
           c.dim(
             `  ${plural(
               res.backedUp.length,
@@ -302,12 +311,12 @@ export async function pruneRepo(repo, cfg, opts = {}) {
         );
       }
     } else {
-      console.log(c.dim("  skipped."));
+      say(c.dim("  skipped."));
     }
   }
 
   if (contentLocal.length > 0) {
-    console.log(
+    say(
       c.dim(
         `  these look squash/rebase-merged: the branch tip's tree already exists in a base branch, but the original commits were rewritten.`
       )
@@ -327,19 +336,19 @@ export async function pruneRepo(repo, cfg, opts = {}) {
             file: bk.file,
             branches: contentLocal.map((b) => b.name),
           });
-          printBackupNote(bk.file, "local");
+          printBackupNote(bk.file, "local", silent);
         }
         const res = deleteLocalBranches(repo, cfg, contentLocal);
         summary.deletedLocal.push(...res.done);
         summary.errors.push(...res.errors);
       }
     } else {
-      console.log(c.dim("  skipped."));
+      say(c.dim("  skipped."));
     }
   }
 
   if (forceLocal.length > 0) {
-    console.log(
+    say(
       c.yellow(
         `  ⚠ ${plural(forceLocal.length, "unmerged branch")} would be force-deleted (work is not in any base branch).`
       )
@@ -356,14 +365,14 @@ export async function pruneRepo(repo, cfg, opts = {}) {
             file: bk.file,
             branches: forceLocal.map((b) => b.name),
           });
-          printBackupNote(bk.file, "local");
+          printBackupNote(bk.file, "local", silent);
         }
         const res = deleteLocalBranches(repo, cfg, forceLocal);
         summary.deletedLocal.push(...res.done);
         summary.errors.push(...res.errors);
       }
     } else {
-      console.log(c.dim("  skipped."));
+      say(c.dim("  skipped."));
     }
   }
 
@@ -380,14 +389,14 @@ export async function pruneRepo(repo, cfg, opts = {}) {
             file: bk.file,
             branches: remoteToDo.map((b) => b.name),
           });
-          printBackupNote(bk.file, "remote");
+          printBackupNote(bk.file, "remote", silent);
         }
         const res = deleteRemoteBranches(repo, remoteToDo);
         summary.deletedRemote.push(...res.done);
         summary.prunedRemote.push(...res.pruned);
         summary.errors.push(...res.errors);
         if (res.pruned.length > 0) {
-          console.log(
+          say(
             c.dim(
               `  ⤳ ${plural(
                 res.pruned.length,
@@ -398,13 +407,13 @@ export async function pruneRepo(repo, cfg, opts = {}) {
         }
       }
     } else {
-      console.log(c.dim("  skipped."));
+      say(c.dim("  skipped."));
     }
   }
 
   const staleWarnings = repo.branches.filter((b) => b.verdict === VERDICTS.WARN).length;
   if (staleWarnings > 0) {
-    console.log(
+    say(
       c.dim(
         `  ${plural(staleWarnings, "branch")} flagged stale but kept (run git-cleanup scan to review)`
       )

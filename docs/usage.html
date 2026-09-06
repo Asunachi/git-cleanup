@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Usage — git-cleanup docs</title>
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="docs-nav">
+    <a class="home" href="./">docs</a>
+    <span class="sep">/</span>
+    <a href="install.html">install</a>
+    <a href="usage.html">usage</a>
+    <a href="config.html">config</a>
+    <a href="forges.html">forges</a>
+    <a href="automation.html">automation</a>
+    <a href="faq.html">faq</a>
+    <span class="sep">/</span>
+    <a href="https://asunachi.github.io/git-cleanup/">playground ↗</a>
+    <a href="https://github.com/Asunachi/git-cleanup">github ↗</a>
+  </nav>
+
+  <h1>Usage<span class="cursor">▊</span></h1>
+  <p class="sub">Run <code>git-cleanup --help</code> for the full option list. Every command below works with <code>--json</code> for machines.</p>
+
+  <table>
+    <tr><th>Command</th><th>What it does</th></tr>
+    <tr><td><code>scan</code></td><td>Report prunable / stale / kept branches (default command)</td></tr>
+    <tr><td><code>prune</code></td><td>Delete merged/stale branches — always asks first</td></tr>
+    <tr><td><code>prs</code></td><td>List stale open PRs; <code>--close</code> closes them</td></tr>
+    <tr><td><code>sweep</code></td><td>One pass over every configured repo; prune by policy; one report</td></tr>
+    <tr><td><code>report-issue</code></td><td>Keep one issue with a fixed title current on any forge</td></tr>
+    <tr><td><code>doctor</code></td><td>Diagnose the environment: git, gh, tokens, config, remotes</td></tr>
+    <tr><td><code>backup</code></td><td>List backup bundles, or restore branches from one</td></tr>
+    <tr><td><code>completions</code></td><td>Print shell completions (bash / zsh / fish)</td></tr>
+    <tr><td><code>shell-hook</code></td><td>Print a shell or git hook snippet</td></tr>
+  </table>
+
+  <h2>scan — what's dead?</h2>
+  <pre><code>$ git-cleanup scan --verbose
+
+📦 /path/to/repo
+base: origin/main   HEAD: main
+  STATUS  BRANCH                       TYPE    AGE   MERGED  PR              REASON
+  PRUNE   feature/merged-old           local   60d   yes     merged #12      merged into base
+  PRUNE   origin/feature/merged-old2   remote  50d   yes     -               merged into base
+  stale   wip/abandoned                local   100d  -       closed #4        unmerged and stale
+  3 prunable · 2 stale · 5 kept
+  → git-cleanup prune  /  git-cleanup prune --remote to delete them</code></pre>
+  <p>
+    <code>--check</code> exits with code <strong>2</strong> when anything is prunable —
+    the CI gate: <code>git-cleanup scan --check &amp;&amp; echo clean</code>.
+  </p>
+
+  <h2>prune — delete, after asking</h2>
+  <p>Candidates are grouped by risk and confirmed separately:</p>
+  <ol>
+    <li>ancestor-merged local branches (default answer <strong>yes</strong>),</li>
+    <li>squash/rebase-merged local branches — content provably in a base branch
+      (default <strong>yes</strong>; net-empty or coincidentally-matching branches are never flagged),</li>
+    <li>unmerged branches matched by force rules (default <strong>no</strong>),</li>
+    <li>merged/abandoned remote branches with <code>--remote</code> (default <strong>yes</strong>, only offered with <code>--remote</code>).</li>
+  </ol>
+  <p>
+    Deletions that lose unique commits write a <strong>git bundle first</strong>
+    (<code>backup list</code> / <code>backup restore</code> to see and restore them). Pass
+    <code>--yes</code> (or set <code>GIT_CLEANUP_YES=1</code>) to run non-interactively.
+  </p>
+
+  <h2>prs — the stale-PR automator</h2>
+  <pre><code>git-cleanup prs                        # list open PRs silent for pr.staleAfterDays (30)
+git-cleanup prs --close --yes          # close them, with a comment (opt-in via config)</code></pre>
+
+  <h2>sweep — every configured repo, one pass</h2>
+  <pre><code>git-cleanup sweep --json                        # scan everything, machine-readable
+git-cleanup sweep --report sweep-report.md      # plus a combined markdown report
+git-cleanup sweep --report-issue "Cleanup" --dry-run
+git-cleanup sweep --yes                         # prune per the config policy</code></pre>
+  <p>
+    The default mode is <code>report</code> — a sweep with no config <strong>deletes
+    nothing</strong>. Pruning requires <code>sweep.mode: "prune"</code> in the config
+    and the same confirmation gate as <code>prune</code>. See
+    <a href="automation.html">Automation</a> for the cron setup.
+  </p>
+
+  <h2>report-issue — one living issue per repo</h2>
+  <pre><code>git-cleanup scan --json &gt; report.json
+git-cleanup report-issue report.md --dry-run     # rehearsal: search, no write
+git-cleanup report-issue report.md               # create or update, any forge</code></pre>
+
+  <h2>doctor — why isn't PR tracking working?</h2>
+  <pre><code>git-cleanup doctor          # one diagnostic report with fix hints
+git-cleanup doctor --json</code></pre>
+
+  <h2>backup — see and restore what prune saved</h2>
+  <pre><code>git-cleanup backup list
+git-cleanup backup restore backup-2026-09-05T22-38-42-618Z-force.bundle</code></pre>
+  <p><code>restore</code> fetches every branch in the bundle back <em>only if it doesn't
+  already exist</em> — nothing is overwritten, and it confirms first.</p>
+
+  <h2>Exit codes</h2>
+  <table>
+    <tr><th>Code</th><th>Meaning</th></tr>
+    <tr><td>0</td><td>ok</td></tr>
+    <tr><td>1</td><td>error (bad config, non-git repo, failed deletion)</td></tr>
+    <tr><td>2</td><td><code>scan --check</code>: cleanup needed</td></tr>
+  </table>
+
+  <footer><a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a> · MIT</footer>
+</div>
+</body>
+</html>

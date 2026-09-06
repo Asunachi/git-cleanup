@@ -26,7 +26,7 @@ GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea enrichment via
 - [Install](#install) — npx, npm, Homebrew, from source
 - [How it compares](#how-it-compares) — git-cleanup vs. other cleaners
 - [Safety model](#safety-model) — nothing is ever deleted automatically
-- [Usage](#usage) — `scan` / `prune` / `prs`
+- [Usage](#usage) — `scan` / `prune` / `prs` / `sweep`
 - [GitHub integration](#github-integration) — PR-aware decisions
 - [Configuration](#configuration) — layered config, rules, multi-repo
 - [Automation / exit codes](#automation--exit-codes) — JSON + `--check` for CI
@@ -52,7 +52,10 @@ GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea enrichment via
 
 **Try the [interactive playground](https://asunachi.github.io/git-cleanup/)** —
 a simulated repo running the real decision engine in your browser: drag the
-age thresholds and watch every branch re-classify live. The page deploys
+age thresholds and watch every branch re-classify live. The site also hosts
+the [reference docs](https://asunachi.github.io/git-cleanup/docs/) —
+install, usage, the full config schema, per-forge setup, automation, and an
+FAQ — plain HTML, shipped from this repo on every deploy. The page deploys
 automatically from this repo on every `main` push — and the release
 workflow pushes the release commit to `main` before tagging, so the site
 always mirrors the published release. The deploy also runs the
@@ -66,6 +69,7 @@ $ git-cleanup scan
 $ git-cleanup prune            # deletes nothing without confirmation
 $ git-cleanup prune --remote   # also git push --delete on merged branches
 $ git-cleanup prs --close      # stale open PR automator
+$ git-cleanup sweep            # every configured repo in one pass
 ```
 
 ## What this repo demonstrates
@@ -80,7 +84,7 @@ not in a tutorial:
 | Five forge providers behind one contract (`src/forge.mjs` + `src/providers/`) | API integration — REST dialects, auth, pagination — and abstraction design: a new forge is one file plus one registry line |
 | Zero npm dependencies, Node built-ins only | Dependency discipline: deliberate, documented, and lint-enforced |
 | Bundle-before-delete pruning with confirmation gates | Safety-critical design: irreversible operations made recoverable, auditable, and dry-runnable |
-| 207 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and differential testing against real git history |
+| 229 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and golden histories (rebase/cherry-pick/octopus) |
 | CI on 3 OS × 3 Node versions, a release workflow, an auto-updating Homebrew tap, GitHub Pages | CI/CD and distribution: GitHub Actions, npm packaging, Homebrew, Pages |
 | CONTRIBUTING with a real release runbook, SECURITY.md, Keep-a-Changelog, 60-second demo video | Documentation that treats the next contributor and reviewer as first-class users |
 
@@ -95,6 +99,7 @@ the CLI command stays `git-cleanup`.
 | Try it, no install | `npx -y @maliqkara/gitcleanup@latest scan` |
 | Install globally | `npm install -g @maliqkara/gitcleanup` |
 | Homebrew | `brew tap Asunachi/git-cleanup && brew install git-cleanup` |
+| GitHub CLI | `gh extension install Asunachi/gh-git-cleanup` → `gh git-cleanup scan` |
 | From source | `git clone https://github.com/Asunachi/git-cleanup.git && cd git-cleanup && node bin/git-cleanup.mjs scan` |
 
 Pin `@latest` when using `npx` — npm ≥ 11's `npx` needs the explicit
@@ -105,6 +110,16 @@ and is kept current automatically: that repo's `update-formula` workflow
 bumps it to each new release (daily poll, no secrets). There is no build
 step and no `npm install` for any method: the tool runs on Node built-ins
 only.
+
+The **`gh` extension**
+([Asunachi/gh-git-cleanup](https://github.com/Asunachi/gh-git-cleanup)) runs a
+real install when you have one and falls back to `npx`, and hands the tool
+gh's own auth token — so PR enrichment works with zero extra setup. The
+**GitHub Action**
+([Asunachi/git-cleanup-action](https://github.com/Asunachi/git-cleanup-action))
+is a stable-name wrapper around the `scan-report` action below; its
+self-test workflow runs the action on itself weekly, and an auto-bump
+workflow re-pins it to each new release.
 
 Then, inside any git repository:
 
@@ -311,6 +326,73 @@ Only open PRs older than `closeStaleAfterDays` (falls back to
 `staleAfterDays`) are closed. Closing PRs never deletes branches — run
 `git-cleanup prune` separately for that.
 
+### `git-cleanup sweep` — one pass over every configured repo
+
+`sweep` is the automation command: it walks the `repos` list from the config,
+scans each repo, applies each repo's mode, and produces **one markdown report
+and one JSON document for the whole run** — optionally posting the report as
+a forge issue:
+
+```bash
+git-cleanup sweep --json                       # scan everything, machine-readable
+git-cleanup sweep --report sweep-report.md     # also write a combined markdown report
+git-cleanup sweep --report-issue "Cleanup" --dry-run   # rehearse the issue post
+git-cleanup sweep --yes                        # prune, per the config policy
+```
+
+Safety-first by construction: the default mode is **`report`** — a sweep with
+no config **deletes nothing**. Pruning requires both a policy opt-in and the
+same confirmation gate as `prune`:
+
+```jsonc
+{
+  "sweep": {
+    "mode": "prune",        // "report" (default, never deletes) | "prune"
+    "remote": false,         // also delete remote branches during sweep
+    "reportFile": "sweep.md", // write a combined report (relative to this file)
+    "reportIssue": true       // true = default title, or { "title": "..." }
+  },
+  "repos": [
+    ".",
+    { "path": "../other-project", "mode": "prune" }  // per-repo override
+  ]
+}
+```
+
+In `prune` mode every deletion goes through `confirmed()` — non-interactive
+runs (cron, CI) **must** pass `--yes` or fail loudly with nothing deleted.
+`--dry-run` scans and searches (read-only) but never deletes and never
+posts. With `sweep.reportIssue` (or `--report-issue <title>`), the report is
+posted to the **first repo with a recognized forge remote**; a configured
+post with nowhere to post is a loud error, never a silent skip. In JSON mode
+stdout carries exactly one JSON document (prune's human block moves to
+stderr). The JSON shape:
+
+```jsonc
+{
+  "tool": "git-cleanup", "command": "sweep", "generatedAt": "...",
+  "dryRun": false, "mode": "report",
+  "report": { "file": "...", "written": true } | null,
+  "issue": { "dryRun": false, "action": "created", "number": 3, "url": "..." } | null,
+  "repos": [
+    { "path": "...", "mode": "report", "prunable": 3, "stale": 2, "kept": 5,
+      "prunableBranches": [...], "staleBranches": [...],
+      "deletedLocal": [...], "deletedRemote": [...], "prunedRemote": [...],
+      "deletedBackups": [...], "backups": [...], "errors": [] }
+  ]
+}
+```
+
+The classic setup — a nightly cron that prunes every configured repo and
+posts the report:
+
+```bash
+# ~/.config/git-cleanup/config.json
+#   { "sweep": { "mode": "prune", "reportIssue": true }, "repos": [...] }
+# crontab:
+0 4 * * *  cd /path/to/config-dir && git-cleanup sweep --yes
+```
+
 ### `git-cleanup doctor` — the environment check
 
 One command answers "why isn't PR tracking working?": it checks git and
@@ -450,7 +532,18 @@ Config files merge in this order (later wins):
   },
 
   // Scan more than one repository at once (paths resolve relative to this file).
-  "repos": ["../other-project", "/srv/legacy"]
+  // Entries may be objects to give a repo its own sweep mode.
+  "repos": ["../other-project", { "path": "/srv/legacy", "mode": "prune" }],
+
+  // `git-cleanup sweep`: one pass over every repo above. "report" never
+  // deletes (default); "prune" deletes through the same confirmation gate
+  // as `prune` (--yes required in scripts/CI).
+  "sweep": {
+    "mode": "report",
+    "remote": false,
+    "reportFile": null,          // combined markdown report, or null
+    "reportIssue": null          // true, { "title": "..." }, or null
+  }
 }
 ```
 

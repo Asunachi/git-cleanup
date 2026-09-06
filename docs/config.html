@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Configuration — git-cleanup docs</title>
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="docs-nav">
+    <a class="home" href="./">docs</a>
+    <span class="sep">/</span>
+    <a href="install.html">install</a>
+    <a href="usage.html">usage</a>
+    <a href="config.html">config</a>
+    <a href="forges.html">forges</a>
+    <a href="automation.html">automation</a>
+    <a href="faq.html">faq</a>
+    <span class="sep">/</span>
+    <a href="https://asunachi.github.io/git-cleanup/">playground ↗</a>
+    <a href="https://github.com/Asunachi/git-cleanup">github ↗</a>
+  </nav>
+
+  <h1>Configuration<span class="cursor">▊</span></h1>
+
+  <h2>Where config is read from (later wins)</h2>
+  <ol>
+    <li>built-in defaults (below)</li>
+    <li><code>~/.config/git-cleanup/config.json</code></li>
+    <li><code>.gitcleanup.json</code> or <code>.git-cleanup.json</code>, found by walking up from the current directory — perfect for per-repo rules</li>
+    <li>a file passed via <code>--config &lt;file&gt;</code></li>
+  </ol>
+  <p>Invalid values are rejected loudly at startup — never silently ignored.</p>
+
+  <h2>Full schema</h2>
+  <pre><code>{
+  // Globs never touched, on top of the built-in protected list.
+  "protected": ["special/release", "vendor/**"],
+
+  // Merged branches at least this old (days, from the tip commit) are prunable.
+  "deleteMergedAfterDays": 21,
+
+  // Unmerged branches older than this are flagged stale (never deleted).
+  "warnUnmergedAfterDays": 45,
+
+  // Per-name rules. mode "merged" = custom age for merged branches;
+  // mode "any" = force-delete even when unmerged (local only — opt in!).
+  "rules": [
+    { "match": "feature/ci-*", "mode": "merged", "minAgeDays": 7 },
+    { "match": "tmp/**", "mode": "any", "minAgeDays": 1 }
+  ],
+
+  "pr": {
+    "track": true,              // enrich branches with PR state
+    "staleAfterDays": 30,       // open PR with no activity = stale
+    "closeStaleAfterDays": 60,  // >0 enables `prs --close`
+    "closeComment": "Auto-closed by git-cleanup — reopen if still needed."
+  },
+
+  "remote": {
+    "pruneMerged": true,             // prune --remote deletes merged remote branches
+    "deleteAbandonedAfterDays": 0    // >0: delete remote branches whose PR closed unmerged
+  },
+
+  "forge": {
+    "hosts": {                       // claim self-hosted forge hostnames
+      "git.example.com": "gitlab",   //   (PR tracking + report-issue)
+      "git.internal": "gitea"
+    }
+  },
+
+  "backup": {
+    "enabled": true,                 // bundle refs before -D / remote deletions
+    "dir": null,                     // null = &lt;git dir&gt;/git-cleanup-backups
+    "retainDays": 0                  // 0 = keep forever; &gt;0 sweeps older bundles
+  },
+
+  "repos": ["../other-project", { "path": "/srv/legacy", "mode": "prune" }],
+
+  "sweep": {
+    "mode": "report",                // "report" never deletes | "prune"
+    "remote": false,                 // also delete remote branches during sweep
+    "reportFile": null,              // combined markdown report path, or null
+    "reportIssue": null              // true, { "title": "..." }, or null
+  }
+}</code></pre>
+
+  <h2>Rule semantics</h2>
+  <p>The first matching rule for a branch wins.</p>
+  <ul>
+    <li><code>mode: "merged"</code> — fires only for merged branches, uses
+      <code>minAgeDays</code> (default <code>deleteMergedAfterDays</code>). An unmerged
+      branch matching one is kept with reason <code>unmerged-rule</code>. Can also
+      <em>raise</em> the generic threshold for a glob.</li>
+    <li><code>mode: "any"</code> — fires on unmerged branches too, with
+      <code>minAgeDays</code> defaulting to 0. Pair with a meaningful age — this is
+      the only way the tool deletes unmerged work, and it only affects local
+      branches.</li>
+  </ul>
+
+  <h2>Protected branches</h2>
+  <p>
+    Base refs (from the remote's HEAD), the checked-out branch, and any name
+    matching the built-in protected list or your <code>protected</code> globs are
+    never pruned. The built-in list covers version-shaped names like
+    <code>v1</code>, <code>5.x</code>, <code>release/*</code>, and the common
+    <code>main</code>/<code>master</code>/<code>develop</code>/<code>dev</code> — add your own
+    with the <code>protected</code> globs.
+  </p>
+
+  <h2>Environment variables</h2>
+  <table>
+    <tr><th>Variable</th><th>Purpose</th></tr>
+    <tr><td><code>GITHUB_TOKEN</code> / <code>GITLAB_TOKEN</code> / <code>BITBUCKET_TOKEN</code> / <code>GITEA_TOKEN</code></td><td>PR enrichment + report-issue auth</td></tr>
+    <tr><td><code>GITLAB_API_BASE</code> / <code>BITBUCKET_API_BASE</code> / <code>GITEA_API_BASE</code> / <code>GITHUB_API_BASE</code></td><td>API base overrides (self-hosted forges)</td></tr>
+    <tr><td><code>CI_API_V4_URL</code></td><td>GitLab report-issue API base (set by GitLab CI)</td></tr>
+    <tr><td><code>CI_JOB_TOKEN</code></td><td>GitLab report-issue fallback auth inside GitLab CI</td></tr>
+    <tr><td><code>GIT_CLEANUP_FETCH_TIMEOUT_MS</code></td><td>forge API timeout (default 15000)</td></tr>
+    <tr><td><code>GIT_CLEANUP_YES=1</code></td><td>same as <code>--yes</code></td></tr>
+    <tr><td><code>GIT_CLEANUP_NO_COLOR=1</code></td><td>disable ANSI colors (NO_COLOR also works)</td></tr>
+  </table>
+
+  <footer><a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a> · MIT</footer>
+</div>
+</body>
+</html>

@@ -152,67 +152,71 @@ lookalikes); the CLI command stays `git-cleanup`. npm history starts at
 Releases are driven by the **`release` workflow**
 (`.github/workflows/release.yml`, manual dispatch only — releases are
 deliberate acts). It runs the full test suite, bumps the version, tags and
-pushes, publishes the GitHub Release, and files the Homebrew tap update as
-a pull request. A `dry_run` input rehearses the entire pipeline without
-changing anything.
+pushes, publishes the GitHub Release, **publishes to npm with Sigstore
+provenance**, and files the Homebrew tap update as a pull request. A
+`dry_run` input rehearses the entire pipeline without changing anything.
 
-Publishing requires an npm account token with 2FA bypass (npmjs.com →
-Access Tokens → *Granular Access Token*, scoped to the package, with the
-2FA-bypass option ticked) when the account has two-factor auth enabled.
+The npm publish now happens **in CI**, not on a laptop: `npm publish
+--provenance` needs the OIDC token GitHub mints for a workflow run, which a
+local publish can never carry — so the registry artifact is verifiably the
+output of this workflow on the release commit, and the tarball always comes
+from the Node 26 the workflow pins for packing (same zlib → the formula
+sha256 always matches; the old “publish from Node 26 or re-pin” caveat is
+gone by construction).
 
 1. Write the release notes first: move the matching `[Unreleased]` content
    in `CHANGELOG.md` into a dated entry and commit it, and update every
    GitHub Action pin to the new tag in the same commit: the README example
    (`scan-report@vX.Y.Z`), `docs/launch-post.md`, and `docs/marketplace.md`
    wherever they show one. The pins must land in the release tree so the
-   tag itself carries them.
-2. Dispatch the **release** workflow (Actions → release → Run workflow)
+   tag itself carries them. The companion repos take care of themselves:
+   `Asunachi/git-cleanup-action` re-pins via its `update-pin` workflow
+   (daily drift check → PR), and `Asunachi/gh-git-cleanup` tracks `@latest`
+   by design — nothing to do for either.
+2. Set the two repository secrets once (Actions → Settings → Secrets and
+   variables):
+
+   - **`NPM_TOKEN`** — an npm *automation* token (npmjs.com → Access
+     Tokens → *Granular Access Token*), scoped to `@maliqkara/gitcleanup`
+     only, with the publish-only permission and 2FA bypass ticked when the
+     account has two-factor auth enabled. Until it is set, the workflow's
+     publish job fails loudly and nothing ships — by design.
+   - **`TAP_REPO_TOKEN`** — a fine-grained PAT with *Contents: Read and
+     write* + *Pull requests: Read and write* on
+     `Asunachi/homebrew-git-cleanup` only (a full-scope PAT works but is
+     not recommended). Without it the workflow fails at the tap checkout —
+     loudly, before anything is pushed.
+
+   ```bash
+   gh secret set NPM_TOKEN --repo Asunachi/git-cleanup
+   gh secret set TAP_REPO_TOKEN --repo Asunachi/git-cleanup
+   ```
+
+3. Dispatch the **release** workflow (Actions → release → Run workflow)
    with `version_bump` (patch/minor/major) or `exact_version` — or
    `dry_run: true` first to rehearse. The workflow:
    - runs `npm test`;
    - bumps `package.json` and re-seeds the tap formula scaffold
      (`support/release/bump-version.mjs`; the sha256 comes from `npm pack`
      of the release tree — deterministic for a fixed Node version, so the
-     workflow pins Node 26 for its packing steps and **npm publish must
-     run on Node 26 too**, or the pin will not match the registry
-     artifact);
+     workflow pins Node 26 for its packing steps and its publish job);
    - commits `Release X.Y.Z`, tags `vX.Y.Z` (annotated), and pushes both
      — which triggers `release-check` and the Pages deploy automatically;
    - creates the GitHub Release from the tag;
+   - publishes to npm (`npm publish --provenance --access public` with
+     `id-token: write`, Node 26, from the tag) — the full test suite runs
+     again via `prepublishOnly` before upload;
    - files the tap PR against `Asunachi/homebrew-git-cleanup` via the
      tap's own `update-formula.sh` in PR mode (`RELEASE_PR=1`), hashing
-     the release tree directly since the npm artifact doesn't exist on the
-     registry until step 4.
+     the release tree directly. It runs only after the npm publish
+     succeeds (`needs: publish-npm`), so the PR is never filed for a
+     version that did not reach the registry.
 
-   The tap-PR step needs the **`TAP_REPO_TOKEN`** repository secret: a
-   fine-grained PAT with *Contents: Read and write* + *Pull requests: Read
-   and write* on `Asunachi/homebrew-git-cleanup` only (a full-scope PAT
-   works but is not recommended). Set it once:
-
-   ```bash
-   gh secret set TAP_REPO_TOKEN --repo Asunachi/git-cleanup
-   ```
-
-   Without it the workflow fails at the tap checkout — loudly, before
-   anything is pushed.
-3. `npm publish --dry-run` first: the `files` field keeps the tarball to
-   `bin/`, `src/`, and the README/LICENSE/CHANGELOG — verify the listing
-   before anything goes out.
-4. `npm publish` runs `prepublishOnly` (`npm test`) and refuses to proceed
-   if any test fails. **Run it with Node 26** (the same version the release
-   workflow pins for packing): `npm pack` output varies across Node
-   versions — Node 20 and Node 26 produce different tarball sha256s for
-   the same tree (verified live) — so a different publish Node would give
-   `brew` users a checksum mismatch until the tap's daily poll re-pins.
-   If you do publish from another Node, dispatch the tap's `update-formula`
-   workflow manually right after publishing so the formula is corrected
-   immediately. The workflow tags the bump commit, so the tag already
-   points at the exact tree npm publishes; if `main` has drifted past the
-   published version instead, tag the bump commit itself and push the tag
-   explicitly so it matches the npm artifact
-   (`git rev-parse vX.Y.Z^{commit}` must equal the bump commit). The
-   release tag is also what consumers pin for the GitHub Action, so a
-   version whose tree lacks a feature must not be presented as carrying it.
+   You can verify the published package's provenance with `npm view
+   @maliqkara/gitcleanup@<version> provenance` — it prints the builder,
+   the source repo, and the exact commit the tarball was built from.
+   `npm publish --dry-run` locally is still a useful pre-flight (it runs
+   the suite and lists the tarball contents), but it does not upload.
 5. **Verify the tarball on every OS before announcing the release.** The
    `release-check` workflow (`.github/workflows/release-check.yml`) runs
    automatically when the `v*` tag is pushed: it packs the exact tree the

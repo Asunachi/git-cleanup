@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Install — git-cleanup docs</title>
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="docs-nav">
+    <a class="home" href="./">docs</a>
+    <span class="sep">/</span>
+    <a href="install.html">install</a>
+    <a href="usage.html">usage</a>
+    <a href="config.html">config</a>
+    <a href="forges.html">forges</a>
+    <a href="automation.html">automation</a>
+    <a href="faq.html">faq</a>
+    <span class="sep">/</span>
+    <a href="https://asunachi.github.io/git-cleanup/">playground ↗</a>
+    <a href="https://github.com/Asunachi/git-cleanup">github ↗</a>
+  </nav>
+
+  <h1>Install<span class="cursor">▊</span></h1>
+
+  <h2>Requirements</h2>
+  <ul>
+    <li><strong>Node.js ≥ 18</strong> (only the runtime — the package has <strong>zero npm dependencies</strong>)</li>
+    <li>the <code>git</code> binary on PATH</li>
+    <li>no other installs; no network access needed at runtime</li>
+  </ul>
+
+  <h2>npm (global)</h2>
+  <pre><code>npm install -g @maliqkara/gitcleanup
+git-cleanup --version</code></pre>
+
+  <h2>Homebrew</h2>
+  <pre><code>brew tap Asunachi/git-cleanup
+brew install git-cleanup</code></pre>
+  <p>
+    The formula is pinned to the published npm tarball by sha256 and
+    re-verified by the tap's daily poll, so the Homebrew build always matches
+    the bytes on the registry.
+  </p>
+
+  <h2>npx (no install)</h2>
+  <pre><code>npx -y @maliqkara/gitcleanup scan</code></pre>
+
+  <h2>From source</h2>
+  <pre><code>git clone https://github.com/Asunachi/git-cleanup.git
+cd git-cleanup
+npm link          # or: node bin/git-cleanup.mjs scan</code></pre>
+
+  <h2>Shell integration (optional)</h2>
+  <pre><code>git-cleanup completions bash &gt; ~/.local/share/bash-completion/completions/git-cleanup
+git-cleanup shell-hook bash &gt;&gt; ~/.bashrc        # auto-scan on every cd
+git-cleanup shell-hook pre-commit &gt; .git/hooks/pre-commit   # remind on commit</code></pre>
+  <p>
+    Completions ship for bash, zsh, and fish. The shell hook prints a prompt
+    snippet that runs a quick <code>scan --summary</code> whenever you enter a
+    repo; the pre-commit hook reminds you about prunable branches without
+    blocking the commit. See the README for the exact install lines per shell.
+  </p>
+
+  <h2>Uninstall</h2>
+  <pre><code>npm uninstall -g @maliqkara/gitcleanup     # npm
+brew uninstall git-cleanup                # Homebrew
+rm -rf ~/.config/git-cleanup              # config + report history</code></pre>
+
+  <footer><a href="https://github.com/Asunachi/git-cleanup">github.com/Asunachi/git-cleanup</a> · MIT</footer>
+</div>
+</body>
+</html>
