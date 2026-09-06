@@ -88,8 +88,11 @@ test("tap workflow: scheduled + manual, runs update-formula.sh against the upstr
 
 test("tap update script: syntactically valid, executable, and rejects a bad current version", (t) => {
   const script = join(TAP, "update-formula.sh");
-  const mode = statSync(script).mode;
-  assert.ok(mode & 0o100, "update-formula.sh should be executable");
+  // The exec bit is a POSIX checkout concept; Windows worktrees never get it.
+  if (process.platform !== "win32") {
+    const mode = statSync(script).mode;
+    assert.ok(mode & 0o100, "update-formula.sh should be executable");
+  }
 
   const r = spawnSync("bash", ["-n", script], { encoding: "utf8" });
   if (r.error && r.error.code === "ENOENT") {

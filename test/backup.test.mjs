@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { listBackupFiles, restoreBackup } from "../src/backup.mjs";
@@ -104,7 +104,7 @@ test("backup list: shows a real bundle with its branches and size", async () => 
     sh(dir, ["commit", "-q", "-m", "lost work"]);
     sh(dir, ["checkout", "-q", "main"]);
     const file = makeBundle(dir);
-    const name = file.split("/").pop();
+    const name = basename(file);
 
     const doc = listBackupFiles(dir, { backup: { enabled: true, dir: null, retainDays: 0 } });
     assert.equal(doc.backups.length, 1);
@@ -162,7 +162,7 @@ test("backup restore: refuses non-interactively without --yes, nothing restored"
 
     const cfg = { backup: { enabled: true, dir: null, retainDays: 0 } };
     await assert.rejects(
-      () => restoreBackup({ cwd: dir, cfg, name: file.split("/").pop() }),
+      () => restoreBackup({ cwd: dir, cfg, name: basename(file) }),
       /--yes.*nothing was restored/
     );
     assert.equal(
@@ -191,7 +191,7 @@ test("backup restore: fetches missing branches back at their original commit", a
     const file = makeBundle(dir); // bundle FIRST: the ref must still exist
     sh(dir, ["checkout", "-q", "main"]);
     sh(dir, ["branch", "-D", "feature/lost"]);
-    const name = file.split("/").pop();
+    const name = basename(file);
 
     const r = await runCli(["backup", "restore", name, "--repo", dir, "--yes"], { home });
     assert.equal(r.code, 0, r.out);
@@ -216,7 +216,7 @@ test("backup restore: branches that already exist are skipped, never clobbered",
     sh(dir, ["checkout", "-q", "main"]);
     const file = makeBundle(dir); // branch still exists locally
 
-    const r = await runCli(["backup", "restore", file.split("/").pop(), "--repo", dir, "--yes"], {
+    const r = await runCli(["backup", "restore", basename(file), "--repo", dir, "--yes"], {
       home,
     });
     assert.equal(r.code, 0, r.out);
@@ -239,7 +239,7 @@ test("backup restore: unknown bundle names fail loudly and list what exists", as
     sh(dir, ["commit", "-q", "-m", "lost work"]);
     sh(dir, ["checkout", "-q", "main"]);
     const file = makeBundle(dir);
-    const name = file.split("/").pop();
+    const name = basename(file);
 
     const r = await runCli(["backup", "restore", "backup-nope.bundle", "--repo", dir, "--yes"], {
       home,
@@ -282,7 +282,7 @@ test("backup restore: a bundle holding remote-tracking refs restores them too", 
     sh(dir, ["update-ref", "-d", "refs/remotes/origin/feature/gone"]);
 
     const r = await runCli(
-      ["backup", "restore", file.split("/").pop(), "--repo", dir, "--yes"],
+      ["backup", "restore", basename(file), "--repo", dir, "--yes"],
       { home }
     );
     assert.equal(r.code, 0, r.out);

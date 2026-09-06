@@ -1,0 +1,5 @@
+# Deterministic line endings on every platform: GitHub Actions Windows
+# runners default to CRLF checkouts, and the structural tests read workflow
+# YAML, scripts, and templates as raw text with \n-anchored assertions (and
+# bash -n rejects CRLF). Blobs stay LF; checkouts are LF everywhere.
+* text=auto eol=lf
