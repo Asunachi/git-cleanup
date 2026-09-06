@@ -21,6 +21,7 @@ GitHub, GitLab, Bitbucket (Cloud and Server), and Gitea enrichment via
 
 ## Contents
 
+- [What this repo demonstrates](#what-this-repo-demonstrates) — the skills behind it
 - [Install](#install) — npx, npm, Homebrew, from source
 - [How it compares](#how-it-compares) — git-cleanup vs. other cleaners
 - [Safety model](#safety-model) — nothing is ever deleted automatically
@@ -60,6 +61,22 @@ $ git-cleanup prune            # deletes nothing without confirmation
 $ git-cleanup prune --remote   # also git push --delete on merged branches
 $ git-cleanup prs --close      # stale open PR automator
 ```
+
+## What this repo demonstrates
+
+A deliberately small project with a real production surface — a CLI, a
+GitHub Action, a Homebrew tap, a CI matrix, an interactive playground, and
+a documented release process — so each of these is exercised for real,
+not in a tutorial:
+
+| You'll find | What it exercises |
+| --- | --- |
+| Five forge providers behind one contract (`src/forge.mjs` + `src/providers/`) | API integration — REST dialects, auth, pagination — and abstraction design: a new forge is one file plus one registry line |
+| Zero npm dependencies, Node built-ins only | Dependency discipline: deliberate, documented, and lint-enforced |
+| Bundle-before-delete pruning with confirmation gates | Safety-critical design: irreversible operations made recoverable, auditable, and dry-runnable |
+| 196 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and differential testing against real git history |
+| CI on 3 OS × 3 Node versions, a release workflow, an auto-updating Homebrew tap, GitHub Pages | CI/CD and distribution: GitHub Actions, npm packaging, Homebrew, Pages |
+| CONTRIBUTING with a real release runbook, SECURITY.md, Keep-a-Changelog, 60-second demo video | Documentation that treats the next contributor and reviewer as first-class users |
 
 ## Install
 

@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A "what this repo demonstrates" skills-mapping section near the top of
+  the README, so reviewers and recruiters can see at a glance which
+  engineering skills each part of the project exercises.
+- The `release-check` workflow now compares the packed tarball's sha256
+  against the Homebrew formula's pin and fails the run when they diverge,
+  so a release with a stale checksum can never be announced (`brew
+  install` stays correct from minute one; the tap's daily poll re-verifies
+  afterwards anyway).
+
 ## [0.3.0] - 2026-09-06
 
 ### Security

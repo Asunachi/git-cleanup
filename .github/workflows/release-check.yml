@@ -35,6 +35,28 @@ jobs:
           npm pack --pack-destination "$RUNNER_TEMP/pack"
           ls -1 "$RUNNER_TEMP/pack"
 
+      - name: The Homebrew formula pin matches the packed tarball
+        shell: bash
+        run: |
+          # A stale sha256 breaks `brew install` for the release until the
+          # tap's daily poll re-verifies — fail here instead, before the
+          # release is announced. The release workflow re-seeds the pin at
+          # release time, so this only trips on a drifted release.
+          cd "$RUNNER_TEMP/pack"
+          TGZ=$(ls *.tgz | head -1)
+          SHA=$(shasum -a 256 "$TGZ" | awk '{print $1}')
+          PIN=$(sed -nE 's#^  sha256 "([0-9a-f]{64})"#\1#p' \
+            "$GITHUB_WORKSPACE/homebrew-git-cleanup/Formula/git-cleanup.rb" | head -n1)
+          [ -n "$PIN" ] || {
+            echo "no sha256 pin found in the formula" >&2
+            exit 1
+          }
+          if [ "$SHA" != "$PIN" ]; then
+            echo "::error::formula pin ${PIN} does not match the packed tarball ${SHA} — re-seed the pin (bump-version or the release workflow) before announcing."
+            exit 1
+          fi
+          echo "formula sha256 ${SHA} matches the packed tarball"
+
       - name: The tarball contains the bin and sources
         shell: bash
         run: |
