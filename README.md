@@ -604,9 +604,10 @@ a badge if any test fails. The file isn't committed: the Pages deploy
 recomputes it and serves it for the README badge, so the number always
 matches the published tree (see `.github/workflows/pages.yml`). CI also runs
 it as a **coverage gate**: PRs and pushes that drop `src/` line coverage
-below the last deployed baseline fail the build (`coverage-gate` job,
-GitHub-only — it needs this repo's deployed baseline, which other projects'
-copies of `.gitlab-ci.yml` don't have), so new code without tests can't land
+below the last deployed baseline (beyond a 0.5pp tolerance band for
+measurement noise) fail the build (`coverage-gate` job, GitHub-only — it
+needs this repo's deployed baseline, which other projects' copies of
+`.gitlab-ci.yml` don't have), so new code without tests can't land
 silently.
 
 Integration tests build a bare `origin` and a working clone with old merged

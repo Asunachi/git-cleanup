@@ -279,6 +279,12 @@ test("coverage gate: a drop below the deployed baseline exits 1, parity passes",
   const pass = await run(40);
   assert.equal(pass.status, 0, pass.stderr);
   assert.match(pass.stdout, /no regression/);
+  // Measurement noise: within the tolerance band of the baseline (66.67 vs
+  // 67 — 0.33pp under) must NOT fail, or the gate would flake on no-op
+  // changes (identical trees measured 0.09pp apart live).
+  const withinTolerance = await run(67);
+  assert.equal(withinTolerance.status, 0, withinTolerance.stderr);
+  assert.match(withinTolerance.stdout, /0\.5pp tolerance/);
 });
 
 test("coverage gate: falls back to the badge message and fails loudly when nothing is reachable", async (t) => {
@@ -313,7 +319,7 @@ test("coverage gate: falls back to the badge message and fails loudly when nothi
   // Raw absent, badge message "40% lines": 66.67 >= 40, passes via the fallback.
   const fbPass = await run({ "/coverage.json": { body: { message: "40% lines · 90% branches" } } });
   assert.equal(fbPass.status, 0, fbPass.stderr);
-  assert.match(fbPass.stdout, /\(badge message\)/);
+  assert.match(fbPass.stdout, /badge message, 0\.5pp tolerance/);
 
   // Raw absent, badge message "60% lines": 66.67 < 60 is false, so instead
   // the raw file stays the arbiter — the fallback must pass: use a badge

@@ -119,6 +119,16 @@ export function runCoverage(extraArgs = []) {
 }
 
 /**
+ * Gate tolerance in percentage points. Coverage is not perfectly
+ * deterministic across CI runs: identical trees have measured ~0.1pp apart
+ * live (pages deploy 94.34% vs gate 94.25% on the same commit), so a zero
+ * tolerance gate fails no-op changes. 0.5pp is 5x the observed noise and
+ * still catches real regressions — an untested 50-line addition to src/
+ * (~2,000 lines) drops coverage by ~2.4pp.
+ */
+export const GATE_TOLERANCE_PP = 0.5;
+
+/**
  * Fetch the deployed line-coverage baseline for the gate.
  *
  * Prefers coverage-raw.json ({ line }); falls back to the badge payload's
@@ -218,7 +228,7 @@ async function main() {
   const { payload, line } = generateBadge(out, passthrough);
   if (baselineUrl) {
     const baseline = await fetchBaseline(baselineUrl);
-    if (line < baseline.line) {
+    if (line < baseline.line - GATE_TOLERANCE_PP) {
       console.error(
         `coverage regression: ${line.toFixed(2)}% lines is below the deployed baseline ` +
           `${baseline.line}% (${baseline.via}) — new code shipped without tests. ` +
@@ -228,7 +238,7 @@ async function main() {
     }
     console.log(
       `coverage gate: ${line.toFixed(2)}% lines ≥ deployed baseline ` +
-        `${baseline.line}% (${baseline.via}) — no regression`
+        `${baseline.line}% (${baseline.via}, ${GATE_TOLERANCE_PP}pp tolerance) — no regression`
     );
   }
   console.log(`coverage: ${payload.message} → ${out} (${payload.color})`);

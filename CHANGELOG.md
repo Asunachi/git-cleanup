@@ -267,8 +267,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the same way the deploy does (Node 22, default fuzz volume) and reads
   the baseline from the deployed `coverage-raw.json`, falling back to the
   badge's rounded message when the raw file predates it; an unreadable
-  baseline fails loudly rather than skipping. GitHub-only by design — the
-  baseline is this repository's deployed site.
+  baseline fails loudly rather than skipping. Coverage is not perfectly
+  deterministic across CI runs (identical trees measured 0.09pp apart
+  live), so the gate allows a 0.5pp tolerance band below the baseline —
+  real regressions land far outside it (an untested 50-line addition to
+  `src/` drops ~2.4pp). GitHub-only by design — the baseline is this
+  repository's deployed site.
 
 ### Changed
 
