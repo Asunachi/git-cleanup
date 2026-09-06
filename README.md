@@ -598,7 +598,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.3.0
+      - uses: Asunachi/git-cleanup/.github/actions/scan-report@v0.4.0
         with:
           path: .
           report: issue
@@ -611,12 +611,15 @@ retention, forge abstraction), `v0.2.4` (GitLab provider, cross-platform
 CI, interactive playground), `v0.2.5` (JSON contract + error-path fixes),
 `v0.2.6` (`-d` fallback for remote-merged branches, end-to-end prs tests),
 `v0.2.7` (single-source decision engine shared with the playground, flag-
-parsing fixes), `v0.2.8` (CI freshness gate + fuzz parity tests), and
-`v0.3.0` (current: the report-issue flow folded into the CLI behind the
-forge `issues` contract, `doctor`, `backup list/restore`, `forge.hosts`
-for self-hosted GitLab/Gitea, a `--force` alias, and the GitLab CI
-template) — all matching what npm serves.
-Pin `@v0.3.0` as shown; use `@main` only if you want the action to track
+parsing fixes), `v0.2.8` (CI freshness gate + fuzz parity tests), `v0.3.0` (the
+report-issue flow folded into the CLI behind the forge `issues` contract,
+`doctor`, `backup list/restore`, `forge.hosts` for self-hosted
+GitLab/Gitea, a `--force` alias, and the GitLab CI template), and
+`v0.4.0` (current: delete-time SHA revalidation with lease-protected
+remote deletes, the revert-branch detection fix, subdirectory-safe
+backups, SSH-port remotes, and a seeded delete-guard fuzz) — all
+matching what npm serves.
+Pin `@v0.4.0` as shown; use `@main` only if you want the action to track
 unreleased changes. (`v0.2.1`'s tree predates the action, so it cannot be
 used to pin it.)
 
