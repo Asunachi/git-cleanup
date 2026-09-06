@@ -21,6 +21,8 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BUMP = join(root, "support", "release", "bump-version.mjs");
+// npm is npm.cmd on Windows (CreateProcess does not resolve PATHEXT).
+const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
 const ORIG_PKG = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const ORIG_FORMULA = readFileSync(
   join(root, "homebrew-git-cleanup", "Formula", "git-cleanup.rb"),
@@ -157,7 +159,7 @@ test("bump-version: real run bumps package.json and re-seeds the tap formula wit
     // The pinned sha must be the sha256 of the tarball this tree packs.
     const packDir = mkdtempSync(join(tmpdir(), "gc-pack-"));
     try {
-      const pack = spawnSync("npm", ["pack", "--pack-destination", packDir], {
+      const pack = spawnSync(NPM, ["pack", "--pack-destination", packDir], {
         cwd: dir,
         encoding: "utf8",
       });

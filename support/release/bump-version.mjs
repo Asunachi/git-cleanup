@@ -19,6 +19,10 @@
 
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+
+// npm is npm.cmd on Windows; CreateProcess does not resolve PATHEXT, so the
+// bare name would ENOENT there (caught on the Windows CI matrix).
+const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -91,7 +95,7 @@ writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + "\n");
 // --- 2. pack the exact tree and hash the tarball --------------------------
 const tmp = mkdtempSync(join(tmpdir(), "gc-bump-"));
 try {
-  const pack = spawnSync("npm", ["pack", "--pack-destination", tmp], {
+  const pack = spawnSync(NPM, ["pack", "--pack-destination", tmp], {
     encoding: "utf8",
   });
   if (pack.status !== 0) {
