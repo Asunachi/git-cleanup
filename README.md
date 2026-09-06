@@ -84,7 +84,7 @@ not in a tutorial:
 | Five forge providers behind one contract (`src/forge.mjs` + `src/providers/`) | API integration — REST dialects, auth, pagination — and abstraction design: a new forge is one file plus one registry line |
 | Zero npm dependencies, Node built-ins only | Dependency discipline: deliberate, documented, and lint-enforced |
 | Bundle-before-delete pruning with confirmation gates | Safety-critical design: irreversible operations made recoverable, auditable, and dry-runnable |
-| 242 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and golden histories (rebase/cherry-pick/octopus) |
+| 243 unit + integration + fuzz tests, structural tests pinning CI/templates so they can't drift | Testing at every level, including seeded fuzz and golden histories (rebase/cherry-pick/octopus) |
 | CI on 3 OS × 3 Node versions, a release workflow, an auto-updating Homebrew tap, GitHub Pages | CI/CD and distribution: GitHub Actions, npm packaging, Homebrew, Pages |
 | CONTRIBUTING with a real release runbook, SECURITY.md, Keep-a-Changelog, 60-second demo video | Documentation that treats the next contributor and reviewer as first-class users |
 
@@ -704,15 +704,18 @@ needs this repo's deployed baseline, which other projects' copies of
 silently.
 
 Integration tests build a bare `origin` and a working clone with old merged
-branches, an orphaned branch, stale unmerged work, and protected branches,
-then assert `scan`, `prune`, and the CLI end-to-end (including `--check`
-exit codes). Merge detection is additionally fuzzed against an oracle
-model: a seeded generator builds random real repositories (merge / squash /
-revert / no-op / divergent histories) and requires the analyzer's verdicts
-to match each branch's true fate — `MERGE_FUZZ_CASES` and `MERGE_FUZZ_SEED`
-scale and reseed it. The lint script is dependency-free and runs inside
-`npm test`, so a commit that breaks syntax or formatting can never go
-green.
+branches, an orphaned branch, stale unmerged work, and protected branches,  then assert `scan`, `prune`, and the CLI end-to-end (including `--check`
+  exit codes). Merge detection is additionally fuzzed against an oracle
+  model: a seeded generator builds random real repositories (merge / squash /
+  revert / no-op / divergent histories) and requires the analyzer's verdicts
+  to match each branch's true fate — `MERGE_FUZZ_CASES` and `MERGE_FUZZ_SEED`
+  scale and reseed it. The delete-time guards are fuzzed the same way
+  (`PRUNE_FUZZ_CASES` / `PRUNE_FUZZ_SEED`): every case mutates branches
+  between scan and prune — commits, rewinds, deletions, server pushes,
+  vanished tracking refs — and requires that moved work always survives.
+  The lint script is dependency-free and runs inside
+  `npm test`, so a commit that breaks syntax or formatting can never go
+  green.
 
 ## Limitations & roadmap
 

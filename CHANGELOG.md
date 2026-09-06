@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   delete-guard refusal (branch moved, branch vanished, base ref lost,
   tracking ref gone — each with the branch surviving), and
   subdirectory invocation (backup paths must stay inside the repo).
+- A seeded differential fuzz for the delete-time guards
+  (`test/prune-guard-fuzz.test.mjs`): every case builds a repo with six
+  merged+pushed branches, mutates them between scan and prune (commit on
+  top, rewind, local delete, server push with and without a fetch, a
+  vanished tracking ref, a server-side delete) and requires the one
+  invariant — moved work always survives — to hold. `PRUNE_FUZZ_CASES`
+  and `PRUNE_FUZZ_SEED` scale and reseed it (default 8 cases, fixed
+  seed; every case exercises every mutation kind, so it never passes
+  vacuously).
 - SSH remotes with custom ports parse correctly on every forge: the
   port (`ssh://git@host:2222/...`, GitHub's SSH-over-443) is transport
   detail and no longer leaks into the owner/path. `doctor` survives a
