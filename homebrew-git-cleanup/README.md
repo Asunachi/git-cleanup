@@ -37,9 +37,10 @@ poll: **Actions → update-formula → Run workflow** in this repository.
 
 ## How the formula stays current
 
-1. `update-formula.sh` resolves the latest release tag of
-   `Asunachi/git-cleanup` (`vX.Y.Z`) — or an explicit `RELEASE_TAG` when one
-   is supplied.
+1. `update-formula.sh` resolves the newest `vX.Y.Z` tag of
+   `Asunachi/git-cleanup` via the GitHub API — or an explicit `RELEASE_TAG`
+   when one is supplied. Tags drive the bump (the project releases by tag);
+   GitHub Release objects are optional and not required.
 2. It compares that version against the formula's current one and does
    nothing when the formula is already current or newer.
 3. Otherwise it downloads the npm tarball that release publishes and

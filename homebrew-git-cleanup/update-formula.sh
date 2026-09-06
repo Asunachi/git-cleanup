@@ -7,7 +7,8 @@
 #
 # What it does:
 #   1. resolves the release to bump to — RELEASE_TAG when set, otherwise the
-#      latest release of UPSTREAM_REPO via `gh api`;
+#      newest vX.Y.Z tag of UPSTREAM_REPO via `gh api` (tags are the source
+#      of truth; GitHub Release objects are optional and not required);
 #   2. skips when the formula already carries that version (or a newer one);
 #   3. downloads the exact npm tarball that release publishes and computes
 #      its sha256;
@@ -45,14 +46,18 @@ else
     echo "error: no RELEASE_TAG given and the GitHub CLI ('gh') is not installed" >&2
     exit 1
   }
+  # Tags are the source of truth (Asunachi/git-cleanup releases by tag, not
+  # by GitHub Release objects), so resolve the newest vX.Y.Z tag. Sorting the
+  # fetched names with -V keeps this correct regardless of API ordering.
   errf="$tmpdir/gh.err"
-  if ! tag="$(gh api "repos/${UPSTREAM_REPO}/releases/latest" -q .tag_name 2>"$errf")"; then
-    if grep -q "HTTP 404" "$errf"; then
-      echo "no releases yet for ${UPSTREAM_REPO} — nothing to bump"
-      exit 0
-    fi
+  if ! tag="$(gh api "repos/${UPSTREAM_REPO}/tags?per_page=100" -q '.[].name' 2>"$errf" \
+      | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"; then
     cat "$errf" >&2
     exit 1
+  fi
+  if [ -z "$tag" ]; then
+    echo "no vX.Y.Z tags yet for ${UPSTREAM_REPO} — nothing to bump"
+    exit 0
   fi
 fi
 
@@ -125,7 +130,9 @@ fi
 cp "$tmpdir/formula.new" "$FORMULA"
 
 echo "git-cleanup $current -> $version (sha256 ${sha:0:12}…)"
-git diff --stat -- "$FORMULA"
+# Cosmetic only — never let a diff hiccup abort the bump (the commit step
+# below still requires a real git repo and fails loudly without one).
+git diff --stat -- "$FORMULA" 2>/dev/null || true
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
   echo "DRY_RUN — not committing."

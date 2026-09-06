@@ -65,6 +65,10 @@ test("tap workflow: scheduled + manual, runs update-formula.sh against the upstr
   assert.match(wf, /runs-on: ubuntu-latest/);
   assert.match(wf, /actions\/checkout@v5/);
   assert.match(wf, /run: \.\/update-formula\.sh/);
+  // gh refuses to authenticate with the automatic GITHUB_TOKEN variable;
+  // it must be passed explicitly as GH_TOKEN or the updater dies on the
+  // first API call (caught live on run #1 of the tap repo).
+  assert.match(wf, /GH_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(wf, /UPSTREAM_REPO: Asunachi\/git-cleanup/);
 
   // Serialize runs so a manual dispatch cannot race the daily poll's push.

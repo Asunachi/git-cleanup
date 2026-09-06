@@ -6,10 +6,10 @@ name: update-formula
 #
 # The upstream repo (Asunachi/git-cleanup) cannot trigger this workflow
 # directly without a cross-repo token, so this poll runs on a schedule:
-# every day at 04:17 UTC the latest release of Asunachi/git-cleanup is
-# compared with the formula's version, and a newer release bumps url +
-# sha256 and pushes the commit. Run it manually (workflow_dispatch) to pull
-# a fresh release immediately instead of waiting for the next poll.
+# every day at 04:17 UTC the newest vX.Y.Z tag of Asunachi/git-cleanup is
+# compared with the formula's version, and a newer tag bumps url + sha256
+# and pushes the commit. Run it manually (workflow_dispatch) to pull a
+# fresh release immediately instead of waiting for the next poll.
 #
 # No secrets are needed: the push uses this repository's automatic
 # GITHUB_TOKEN (contents: write), and reading the upstream repo's public
@@ -38,5 +38,9 @@ jobs:
         shell: bash
         run: ./update-formula.sh
         env:
+          # gh does not read the automatic GITHUB_TOKEN variable — it needs
+          # GH_TOKEN explicitly (the push itself needs no token handling:
+          # actions/checkout configures the origin URL with credentials).
+          GH_TOKEN: ${{ github.token }}
           UPSTREAM_REPO: Asunachi/git-cleanup
           BRANCH: ${{ github.ref_name }}
