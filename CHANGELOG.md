@@ -47,25 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vacuously).
 - SSH remotes with custom ports parse correctly on every forge: the
   port (`ssh://git@host:2222/...`, GitHub's SSH-over-443) is transport
-  detail and no longer leaks into the owner/path. `doctor` survives a
-  missing git binary — the repo section degrades to a warning instead of
-  crashing the whole report.
-
-### Fixed
-
-- `repoMeta` resolved git's relative `--git-common-dir` against the repo
-  root instead of the caller's cwd: running from a subdirectory (or a
-  linked worktree) could point backups at a *neighboring* project's
-  `.git` directory. It now resolves against the invocation directory.
-- `isContentMerged` computed the fork point (merge-base + tree) once per
-  base ref instead of once per matching tree occurrence, so histories
-  where one tree repeats many times (e.g. `--allow-empty` chains) no
-  longer spawn a small army of `git merge-base` processes per branch.
-- A ref that vanished between scan and prune (e.g. `git fetch --prune` in
-  another terminal) aborts the batch with a plain "N branches no longer
-  resolve (names) — re-run scan" instead of git's raw "ambiguous
-  argument" trace — nothing is deleted either way.
-
+  detail and no longer leaks into the owner/path.
 - `git-cleanup sweep`: one pass over every configured repo — scan, prune
   by policy (`sweep.mode: "report"` never deletes — the default; `"prune"`
   goes through the same confirmation gate as `prune`), one combined
@@ -103,6 +85,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stable-name wrapper around the `scan-report` action, self-tested on
   itself weekly and auto-re-pinned to each release by a drift-check
   workflow.
+
+### Fixed
+
+- `repoMeta` resolved git's relative `--git-common-dir` against the repo
+  root instead of the caller's cwd: running from a subdirectory (or a
+  linked worktree) could point backups at a *neighboring* project's
+  `.git` directory. It now resolves against the invocation directory.
+- `isContentMerged` computed the fork point (merge-base + tree) once per
+  base ref instead of once per matching tree occurrence, so histories
+  where one tree repeats many times (e.g. `--allow-empty` chains) no
+  longer spawn a small army of `git merge-base` processes per branch.
+- A ref that vanished between scan and prune (e.g. `git fetch --prune` in
+  another terminal) aborts the batch with a plain "N branches no longer
+  resolve (names) — re-run scan" instead of git's raw "ambiguous
+  argument" trace — nothing is deleted either way.
+- `doctor` no longer crashes when git is missing: the repo section
+  degrades to a warning with a fix hint instead of aborting the whole
+  report.
 
 ## [0.3.0] - 2026-09-06
 
